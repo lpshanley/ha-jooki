@@ -10,5 +10,5 @@
   "issue_tracker": "https://github.com/lpshanley/ha-jooki/issues",
   "loggers": ["custom_components.jooki"],
   "requirements": ["paho-mqtt==2.1.0"],
-  "version": "0.1.0"
+  "version": "0.1.1"
 }
