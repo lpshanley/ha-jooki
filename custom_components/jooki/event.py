@@ -35,7 +35,7 @@ class JookiNfcEvent(EventEntity):
 
     _attr_has_entity_name = True
     _attr_name = "Figurine"
-    _attr_icon = "mdi:star-face"
+    _attr_icon = "mdi:teddy-bear"
     _attr_event_types = ["figurine_placed", "figurine_removed"]
 
     def __init__(self, client: JookiMqttClient, entry: JookiConfigEntry) -> None:

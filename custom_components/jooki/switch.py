@@ -30,7 +30,7 @@ class JookiToySafeSwitch(SwitchEntity):
 
     _attr_has_entity_name = True
     _attr_name = "Toy Safe"
-    _attr_icon = "mdi:shield-baby"
+    _attr_icon = "mdi:ear-hearing"
     _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(self, client: JookiMqttClient, entry: JookiConfigEntry) -> None:

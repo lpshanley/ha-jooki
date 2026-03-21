@@ -66,6 +66,7 @@ async def async_setup_entry(
             key="spotify_connected",
             name="Spotify Connected",
             device_class=BinarySensorDeviceClass.CONNECTIVITY,
+            icon="mdi:spotify",
             value_fn=lambda s: s.spotify.active,
             entity_category=EntityCategory.DIAGNOSTIC,
         ),

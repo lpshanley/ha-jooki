@@ -35,7 +35,7 @@ class JookiFigurineSelect(SelectEntity):
 
     _attr_has_entity_name = True
     _attr_name = "Figurine Select"
-    _attr_icon = "mdi:star-face"
+    _attr_icon = "mdi:teddy-bear"
 
     def __init__(self, client: JookiMqttClient, entry: JookiConfigEntry) -> None:
         """Initialize the figurine select entity."""

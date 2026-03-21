@@ -57,7 +57,7 @@ async def async_setup_entry(
             entry=entry,
             key="figurine",
             name="Figurine",
-            icon="mdi:star-face",
+            icon="mdi:teddy-bear",
             value_fn=lambda s: s.nfc.star_id if s.nfc.present else None,
         ),
         JookiSensor(
