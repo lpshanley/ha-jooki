@@ -65,13 +65,24 @@ class JookiToySafeSwitch(SwitchEntity):
         return self._client.state.device.toy_safe
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Enable Toy Safe mode."""
+        """Enable Toy Safe mode.
+
+        The device does NOT emit a state update when enabling Toy Safe,
+        so we optimistically update the local state after publishing.
+        If async_publish raises, execution stops before the update.
+        """
         await self._client.async_publish(
             self._cfg.topic_set_toy_safe, json.dumps({"enable": True})
         )
+        self._client.state.device.toy_safe = True
+        self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        """Disable Toy Safe mode."""
+        """Disable Toy Safe mode.
+
+        The device emits a state update with toy_safe=false and
+        TOY_SAFE_OFF in flags when disabling.
+        """
         await self._client.async_publish(
             self._cfg.topic_set_toy_safe, json.dumps({"enable": False})
         )

@@ -1,13 +1,18 @@
 # Jooki Integration for Home Assistant
 
-A custom [Home Assistant](https://www.home-assistant.io/) integration for the [Jooki](https://www.jooki.rocks/) children's music player, communicating directly with the device's built-in MQTT broker.
+A custom [Home Assistant](https://www.home-assistant.io/) integration for the [Jooki](https://www.jooki.rocks/) children's music player, communicating directly with the device's built-in MQTT broker. Supports both J1000 (original) and J2000 (second generation) models.
 
 ## Features
 
-- **Media Player** — Play, pause, next/previous track, volume control, and shutdown
-- **Battery Sensor** — Current battery level as a percentage
-- **Charging Sensor** — Whether the device is currently charging
-- **LED Ring Light** — RGB color control for the Jooki's LED ring
+- **Media Player** — Play, pause, next/previous track, volume, repeat, shuffle, shutdown, album art, and seek bar
+- **Media Browser** — Browse playlists and figurines directly from the HA media player card
+- **Figurine Select** — Virtually place or remove a figurine from Home Assistant
+- **NFC & Button Events** — Figurine placement/removal and physical button presses as HA events for automations
+- **Toy Safe Switch** — Toggle the device's hearing-safe content filtering mode
+- **Battery & Power Sensors** — Battery level, voltage, charging state, and plugged-in state
+- **Spotify Status** — Spotify connection status
+- **WiFi Diagnostics** — Signal strength, SSID, and device disk usage
+- **Resync Button** — Force a full state refresh from the device on demand
 
 ## Prerequisites
 
@@ -34,25 +39,40 @@ A custom [Home Assistant](https://www.home-assistant.io/) integration for the [J
 
 1. Go to **Settings > Devices & Services > Add Integration**
 2. Search for **Jooki**
-3. Enter the device's IP address, MQTT port (default 1883), and a friendly name
+3. Enter the device's IP address, MQTT port (default 1883), a friendly name, and select the device model (J1000 or J2000)
 4. The integration will test the MQTT connection before completing setup
 
 ## Entities
 
-Once configured, the integration creates a single device with four entities:
+Once configured, the integration creates a single device with the following entities:
 
 | Entity | Type | Description |
 |--------|------|-------------|
-| Jooki | Media Player | Playback controls, volume, current track info |
+| Jooki | Media Player | Playback controls, volume, track info, media browser |
 | Battery | Sensor | Battery level (0-100%) |
-| Charging | Binary Sensor | Charging state (on/off) |
-| LED Ring | Light | RGB color control for the LED ring |
+| Figurine | Sensor | Currently placed figurine name |
+| WiFi Signal | Sensor | WiFi signal strength (dBm) · diagnostic |
+| WiFi SSID | Sensor | Connected network name · diagnostic |
+| Battery Voltage | Sensor | Battery voltage (mV) · diagnostic |
+| Disk Usage | Sensor | Device storage usage (%) · diagnostic |
+| Charging | Binary Sensor | Charging state |
+| Plugged In | Binary Sensor | Power cable connection state |
+| Headphones | Binary Sensor | Headphone output state |
+| Figurine Present | Binary Sensor | Whether a figurine is on the device |
+| Spotify Connected | Binary Sensor | Spotify backend connection · diagnostic |
+| Toy Safe | Switch | Hearing-safe content filtering toggle · config |
+| Figurine Select | Select | Virtually place/remove a figurine |
+| Resync | Button | Force full state refresh · diagnostic |
+| Figurine Event | Event | Figurine placed/removed events |
+| Next Button | Event | Physical next button press/release |
+| Previous Button | Event | Physical previous button press/release |
+| Circle Button | Event | Physical circle button press/release |
 
 ## Known Limitations
 
 - The Jooki is battery-powered and goes offline when turned off. Entities will show as **unavailable** when the device is off and automatically reconnect when it powers back on.
-- LED state is **optimistic** — the Jooki does not report its LED state, so the integration tracks it locally.
 - The volume range is assumed to be 0-100. This may need calibration for your device.
+- Media browser and figurine select require the device to have sent its database state (happens automatically on connect via GET_STATE).
 
 ## Contributing
 

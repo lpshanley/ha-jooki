@@ -16,7 +16,6 @@ PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
     Platform.BUTTON,
     Platform.EVENT,
-    Platform.LIGHT,
     Platform.MEDIA_PLAYER,
     Platform.SELECT,
     Platform.SENSOR,
@@ -66,26 +65,15 @@ class JookiDeviceConfig:
     topic_get_state: str
     topic_connect: str
     topic_set_toy_safe: str
-    topic_playlist_new: str
-    topic_playlist_update: str
-    topic_token_edit: str
 
-    # MQTT topics — NFC
+    # MQTT topics — NFC (hardware spoofing: publish to simulate figurine events)
     topic_nfc_tag: str
     topic_nfc_tag_removed: str
 
-    # MQTT topics — GPIO (buttons)
+    # MQTT topics — GPIO (subscribe for button events)
     topic_gpio_next: str
     topic_gpio_prev: str
     topic_gpio_circle: str
-
-    # MQTT topics — LEDs
-    topic_led_set_raw: str
-    topic_led_pulse_raw: str
-    topic_led_charge_state: str
-
-    # LED identifiers
-    led_ids: tuple[str, ...]
 
 
 # -- Jooki J1000 (original) ------------------------------------------------
@@ -106,18 +94,11 @@ DEVICE_CONFIG_V1 = JookiDeviceConfig(
     topic_get_state="/j/web/input/GET_STATE",
     topic_connect="/j/web/input/CONNECT",
     topic_set_toy_safe="/j/web/input/SET_TOY_SAFE",
-    topic_playlist_new="/j/web/input/PLAYLIST_NEW",
-    topic_playlist_update="/j/web/input/PLAYLIST_UPDATE",
-    topic_token_edit="/j/web/input/TOKEN_EDIT",
     topic_nfc_tag="/j/nfc/input/tag",
     topic_nfc_tag_removed="/j/nfc/input/tag_removed",
     topic_gpio_next="/j/gpio/input/next",
     topic_gpio_prev="/j/gpio/input/prev",
     topic_gpio_circle="/j/gpio/input/circle",
-    topic_led_set_raw="/j/led/output/set_raw",
-    topic_led_pulse_raw="/j/led/output/pulse_raw",
-    topic_led_charge_state="/j/led/output/charge_state",
-    led_ids=("ALL", "CIRCLE", "NEXT", "VOL_INC", "VOL_DEC", "PREV", "RING"),
 )
 
 # -- Jooki J2000 (second generation, ml-j2000) -----------------------------
@@ -138,18 +119,11 @@ DEVICE_CONFIG_V2 = JookiDeviceConfig(
     topic_get_state="/j/web/input/GET_STATE",
     topic_connect="/j/web/input/CONNECT",
     topic_set_toy_safe="/j/web/input/SET_TOY_SAFE",
-    topic_playlist_new="/j/web/input/PLAYLIST_NEW",
-    topic_playlist_update="/j/web/input/PLAYLIST_UPDATE",
-    topic_token_edit="/j/web/input/TOKEN_EDIT",
     topic_nfc_tag="/j/nfc/input/tag",
     topic_nfc_tag_removed="/j/nfc/input/tag_removed",
     topic_gpio_next="/j/gpio/input/next",
     topic_gpio_prev="/j/gpio/input/prev",
     topic_gpio_circle="/j/gpio/input/circle",
-    topic_led_set_raw="/j/led/output/set_raw",
-    topic_led_pulse_raw="/j/led/output/pulse_raw",
-    topic_led_charge_state="/j/led/output/charge_state",
-    led_ids=("ALL", "CIRCLE", "NEXT", "VOL_INC", "VOL_DEC", "PREV", "RING"),
 )
 
 DEVICE_CONFIGS: dict[str, JookiDeviceConfig] = {

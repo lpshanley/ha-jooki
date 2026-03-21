@@ -446,4 +446,6 @@ class JookiMediaPlayer(MediaPlayerEntity):
 
     async def async_turn_off(self) -> None:
         """Shut down the Jooki."""
-        await self._client.async_publish(self._cfg.topic_shutdown)
+        await self._client.async_publish(
+            self._cfg.topic_shutdown, json.dumps({"src": "from-web"})
+        )
