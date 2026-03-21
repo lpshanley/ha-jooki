@@ -110,6 +110,55 @@ class JookiDeviceInfo:
     toy_safe: bool = False
 
 
+@dataclass
+class JookiPlaylist:
+    """A single playlist entry from the device content database."""
+
+    playlist_id: str = ""
+    title: str = ""
+    image: str | None = None
+    tag_id: str | None = None
+    audiobook: bool = False
+    tracks: list[str] = field(default_factory=list)
+    # Spotify-linked playlists
+    spotify_source: str | None = None
+    spotify_uri: str | None = None
+
+
+@dataclass
+class JookiToken:
+    """An NFC token/figurine from the device content database."""
+
+    tag_id: str = ""
+    name: str = ""
+    star_id: str | None = None
+    seen: int | None = None
+
+
+@dataclass
+class JookiTrack:
+    """A local track from the device content database."""
+
+    track_id: str = ""
+    title: str = ""
+    artist: str | None = None
+    album: str | None = None
+    duration: int | None = None
+    filename: str | None = None
+    format: str | None = None
+    has_image: bool = False
+    size: int | None = None
+
+
+@dataclass
+class JookiDatabaseState:
+    """Device content database state (v2: db)."""
+
+    playlists: dict[str, JookiPlaylist] = field(default_factory=dict)
+    tokens: dict[str, JookiToken] = field(default_factory=dict)
+    tracks: dict[str, JookiTrack] = field(default_factory=dict)
+
+
 # ---------------------------------------------------------------------------
 # Facade dataclasses (existing entity API — kept for backward compatibility)
 # ---------------------------------------------------------------------------
@@ -171,6 +220,7 @@ class JookiState:
     nfc: JookiNfcState = field(default_factory=JookiNfcState)
     spotify: JookiSpotifyState = field(default_factory=JookiSpotifyState)
     device: JookiDeviceInfo = field(default_factory=JookiDeviceInfo)
+    db: JookiDatabaseState = field(default_factory=JookiDatabaseState)
 
     # ------------------------------------------------------------------
     # V1: full-replace (existing behavior)
@@ -205,6 +255,7 @@ class JookiState:
         self._rebuild_nfc()
         self._rebuild_spotify()
         self._rebuild_device()
+        self._rebuild_db()
         self._rebuild_facade()
 
     # -- Power ----------------------------------------------------------
@@ -322,6 +373,53 @@ class JookiState:
                 disk_usage=device_data.get("diskUsage"),
                 flags=device_data.get("flags"),
                 toy_safe=device_data.get("toy_safe", False),
+            )
+
+    # -- Database (playlists / tokens / tracks) ---------------------------
+
+    def _rebuild_db(self) -> None:
+        db_data = self.raw.get("db", {})
+        if not db_data:
+            return
+
+        # Playlists — keyed by playlist ID
+        playlists_data = db_data.get("playlists", {})
+        for pid, pdata in playlists_data.items():
+            spotify_data = pdata.get("spotify", {})
+            self.db.playlists[pid] = JookiPlaylist(
+                playlist_id=pid,
+                title=pdata.get("title", ""),
+                image=pdata.get("image"),
+                tag_id=pdata.get("tagId"),
+                audiobook=pdata.get("audiobook", False),
+                tracks=pdata.get("tracks", []),
+                spotify_source=spotify_data.get("source") if spotify_data else None,
+                spotify_uri=spotify_data.get("uri") if spotify_data else None,
+            )
+
+        # Tokens — keyed by NFC tag ID
+        tokens_data = db_data.get("tokens", {})
+        for tid, tdata in tokens_data.items():
+            self.db.tokens[tid] = JookiToken(
+                tag_id=tid,
+                name=tdata.get("name", ""),
+                star_id=tdata.get("starId"),
+                seen=tdata.get("seen"),
+            )
+
+        # Tracks — keyed by content hash
+        tracks_data = db_data.get("tracks", {})
+        for trid, trdata in tracks_data.items():
+            self.db.tracks[trid] = JookiTrack(
+                track_id=trid,
+                title=trdata.get("title", ""),
+                artist=trdata.get("artist"),
+                album=trdata.get("album"),
+                duration=trdata.get("duration"),
+                filename=trdata.get("filename"),
+                format=trdata.get("format2"),
+                has_image=trdata.get("hasImage", False),
+                size=trdata.get("size"),
             )
 
     # -- Facade (backward-compatible JookiPlaybackState) ----------------

@@ -8,13 +8,13 @@
           "host": "Host",
           "port": "Port",
           "name": "Device name",
-          "device_version": "Device version"
+          "device_version": "Device model"
         },
         "data_description": {
           "host": "IP address or hostname of your Jooki",
           "port": "MQTT broker port (default 1883)",
           "name": "Friendly name for this Jooki device",
-          "device_version": "Select the hardware version of your Jooki player"
+          "device_version": "Select the hardware model of your Jooki player (J1000 = original, J2000 = second generation)"
         }
       }
     },

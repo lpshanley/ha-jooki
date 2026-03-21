@@ -29,8 +29,8 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_NAME, default=DEFAULT_NAME): str,
         vol.Required(CONF_DEVICE_VERSION, default=DEVICE_VERSION_V1): vol.In(
             {
-                "v1": "Jooki v1 (Original)",
-                "v2": "Jooki v2 (Second Generation)",
+                DEVICE_VERSION_V1: "Jooki J1000 (Original)",
+                DEVICE_VERSION_V2: "Jooki J2000 (Second Generation)",
             }
         ),
     }

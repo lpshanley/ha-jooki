@@ -27,8 +27,8 @@ SIGNAL_STATE_UPDATED = f"{DOMAIN}_state_updated_{{}}"
 # Version-specific device configuration
 # ---------------------------------------------------------------------------
 
-DEVICE_VERSION_V1 = "v1"
-DEVICE_VERSION_V2 = "v2"
+DEVICE_VERSION_V1 = "j1000"
+DEVICE_VERSION_V2 = "j2000"
 DEVICE_VERSIONS = [DEVICE_VERSION_V1, DEVICE_VERSION_V2]
 
 
@@ -50,6 +50,7 @@ class JookiDeviceConfig:
     topic_do_prev: str
     topic_playlist_play: str
     topic_shutdown: str
+    topic_set_cfg: str
 
     # MQTT topics — LEDs
     topic_led_set_raw: str
@@ -63,7 +64,7 @@ class JookiDeviceConfig:
 
 DEVICE_CONFIG_V1 = JookiDeviceConfig(
     version=DEVICE_VERSION_V1,
-    model_name="Jooki Player (v1)",
+    model_name="Jooki J1000",
     topic_state="/j/web/output/state",
     topic_set_vol="/j/web/input/SET_VOL",
     topic_do_play="/j/web/input/DO_PLAY",
@@ -72,18 +73,17 @@ DEVICE_CONFIG_V1 = JookiDeviceConfig(
     topic_do_prev="/j/web/input/DO_PREV",
     topic_playlist_play="/j/web/input/PLAYLIST_PLAY",
     topic_shutdown="/j/web/input/SHUTDOWN",
+    topic_set_cfg="/j/web/input/SET_CFG",
     topic_led_set_raw="/j/led/output/set_raw",
     topic_led_pulse_raw="/j/led/output/pulse_raw",
     led_ids=("ALL", "CIRCLE", "NEXT", "VOL_INC", "VOL_DEC", "PREV", "RING"),
 )
 
-# -- Jooki v2 (second generation) ------------------------------------------
-# TODO: Update these topics/payloads as we discover the v2 protocol.
-#       Starting as a copy of v1 — we'll diverge as needed.
+# -- Jooki J2000 (second generation, ml-j2000) -----------------------------
 
 DEVICE_CONFIG_V2 = JookiDeviceConfig(
     version=DEVICE_VERSION_V2,
-    model_name="Jooki Player (v2)",
+    model_name="Jooki J2000",
     topic_state="/j/web/output/state",
     topic_set_vol="/j/web/input/SET_VOL",
     topic_do_play="/j/web/input/DO_PLAY",
@@ -92,6 +92,7 @@ DEVICE_CONFIG_V2 = JookiDeviceConfig(
     topic_do_prev="/j/web/input/DO_PREV",
     topic_playlist_play="/j/web/input/PLAYLIST_PLAY",
     topic_shutdown="/j/web/input/SHUTDOWN",
+    topic_set_cfg="/j/web/input/SET_CFG",
     topic_led_set_raw="/j/led/output/set_raw",
     topic_led_pulse_raw="/j/led/output/pulse_raw",
     led_ids=("ALL", "CIRCLE", "NEXT", "VOL_INC", "VOL_DEC", "PREV", "RING"),

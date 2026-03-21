@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import JookiConfigEntry
 from .const import DOMAIN, SIGNAL_STATE_UPDATED
+from .models import JookiState
 from .mqtt_client import JookiMqttClient
 
 
@@ -22,23 +25,72 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Jooki binary sensors from a config entry."""
-    async_add_entities([JookiChargingBinarySensor(entry.runtime_data, entry)])
+    client = entry.runtime_data
+    async_add_entities([
+        JookiBinarySensor(
+            client=client,
+            entry=entry,
+            key="charging",
+            name="Charging",
+            device_class=BinarySensorDeviceClass.BATTERY_CHARGING,
+            value_fn=lambda s: s.power.charging,
+        ),
+        JookiBinarySensor(
+            client=client,
+            entry=entry,
+            key="plugged_in",
+            name="Plugged In",
+            device_class=BinarySensorDeviceClass.PLUG,
+            value_fn=lambda s: s.power.connected,
+        ),
+        JookiBinarySensor(
+            client=client,
+            entry=entry,
+            key="headphones",
+            name="Headphones",
+            device_class=None,
+            icon="mdi:headphones",
+            value_fn=lambda s: s.audio_config.headphones_en,
+        ),
+        JookiBinarySensor(
+            client=client,
+            entry=entry,
+            key="figurine_present",
+            name="Figurine Present",
+            device_class=BinarySensorDeviceClass.PRESENCE,
+            value_fn=lambda s: s.nfc.present,
+        ),
+    ])
 
 
-class JookiChargingBinarySensor(BinarySensorEntity):
-    """Charging state binary sensor for a Jooki device."""
+class JookiBinarySensor(BinarySensorEntity):
+    """Generic binary sensor for a Jooki device."""
 
     _attr_has_entity_name = True
-    _attr_name = "Charging"
-    _attr_device_class = BinarySensorDeviceClass.BATTERY_CHARGING
 
-    def __init__(self, client: JookiMqttClient, entry: JookiConfigEntry) -> None:
-        """Initialize the charging sensor."""
+    def __init__(
+        self,
+        client: JookiMqttClient,
+        entry: JookiConfigEntry,
+        key: str,
+        name: str,
+        value_fn: Callable[[JookiState], bool],
+        device_class: BinarySensorDeviceClass | None = None,
+        icon: str | None = None,
+        entity_category: EntityCategory | None = None,
+    ) -> None:
+        """Initialize the binary sensor."""
         self._client = client
-        self._attr_unique_id = f"{entry.entry_id}_charging"
+        self._value_fn = value_fn
+        self._attr_name = name
+        self._attr_unique_id = f"{entry.entry_id}_{key}"
+        self._attr_device_class = device_class
+        self._attr_entity_category = entity_category
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
         )
+        if icon:
+            self._attr_icon = icon
         self._signal = SIGNAL_STATE_UPDATED.format(entry.entry_id)
 
     async def async_added_to_hass(self) -> None:
@@ -59,5 +111,5 @@ class JookiChargingBinarySensor(BinarySensorEntity):
 
     @property
     def is_on(self) -> bool | None:
-        """Return True if the Jooki is charging."""
-        return self._client.state.power.charging
+        """Return the binary sensor state."""
+        return self._value_fn(self._client.state)
