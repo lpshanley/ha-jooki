@@ -80,6 +80,24 @@ class JookiMqttClient:
         """Publish a message to the Jooki."""
         await self._hass.async_add_executor_job(self._client.publish, topic, payload)
 
+    async def async_resync(self) -> None:
+        """Send CONNECT handshake + GET_STATE to request a full state dump.
+
+        This can be called on demand (e.g., from a button entity) to force
+        the device to re-send its complete state.
+        """
+        cfg = self._device_config
+        connect_payload = json.dumps({
+            "jooki": {
+                "live": self._host,
+                "version": "ha-jooki",
+                "label": self._host,
+            }
+        })
+        await self.async_publish(cfg.topic_connect, connect_payload)
+        await self.async_publish(cfg.topic_get_state, "{}")
+        _LOGGER.debug("Resync requested for Jooki at %s", self._host)
+
     def _on_connect(
         self,
         client: mqtt.Client,
@@ -100,6 +118,28 @@ class JookiMqttClient:
         # updates on reconnect; v1 will get a single full state message.
         self._state = JookiState(available=True)
         self._dispatch()
+
+        # Request a full state dump so we immediately have complete state
+        # rather than waiting for individual partials to trickle in.
+        self._send_connect_handshake()
+        self._request_full_state()
+
+    def _send_connect_handshake(self) -> None:
+        """Send the CONNECT handshake (runs on paho thread)."""
+        connect_payload = json.dumps({
+            "jooki": {
+                "live": self._host,
+                "version": "ha-jooki",
+                "label": self._host,
+            }
+        })
+        self._client.publish(
+            self._device_config.topic_connect, connect_payload
+        )
+
+    def _request_full_state(self) -> None:
+        """Send GET_STATE to request a full state dump (runs on paho thread)."""
+        self._client.publish(self._device_config.topic_get_state, "{}")
 
     def _on_disconnect(
         self,
@@ -127,7 +167,9 @@ class JookiMqttClient:
             return
 
         if self.is_v2:
-            # V2: partial update — deep-merge into accumulated state
+            # V2: partial update — deep-merge into accumulated state.
+            # Also handles the full dump from GET_STATE (all keys in one
+            # message) since merge_partial deep-merges all top-level keys.
             self._state.merge_partial(payload)
         else:
             # V1: full-replace — each message is the complete state

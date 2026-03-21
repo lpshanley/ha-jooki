@@ -14,6 +14,7 @@ CONF_DEVICE_VERSION = "device_version"
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
+    Platform.BUTTON,
     Platform.LIGHT,
     Platform.MEDIA_PLAYER,
     Platform.SENSOR,
@@ -51,6 +52,8 @@ class JookiDeviceConfig:
     topic_playlist_play: str
     topic_shutdown: str
     topic_set_cfg: str
+    topic_get_state: str
+    topic_connect: str
 
     # MQTT topics — LEDs
     topic_led_set_raw: str
@@ -74,6 +77,8 @@ DEVICE_CONFIG_V1 = JookiDeviceConfig(
     topic_playlist_play="/j/web/input/PLAYLIST_PLAY",
     topic_shutdown="/j/web/input/SHUTDOWN",
     topic_set_cfg="/j/web/input/SET_CFG",
+    topic_get_state="/j/web/input/GET_STATE",
+    topic_connect="/j/web/input/CONNECT",
     topic_led_set_raw="/j/led/output/set_raw",
     topic_led_pulse_raw="/j/led/output/pulse_raw",
     led_ids=("ALL", "CIRCLE", "NEXT", "VOL_INC", "VOL_DEC", "PREV", "RING"),
@@ -93,6 +98,8 @@ DEVICE_CONFIG_V2 = JookiDeviceConfig(
     topic_playlist_play="/j/web/input/PLAYLIST_PLAY",
     topic_shutdown="/j/web/input/SHUTDOWN",
     topic_set_cfg="/j/web/input/SET_CFG",
+    topic_get_state="/j/web/input/GET_STATE",
+    topic_connect="/j/web/input/CONNECT",
     topic_led_set_raw="/j/led/output/set_raw",
     topic_led_pulse_raw="/j/led/output/pulse_raw",
     led_ids=("ALL", "CIRCLE", "NEXT", "VOL_INC", "VOL_DEC", "PREV", "RING"),

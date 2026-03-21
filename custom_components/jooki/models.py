@@ -132,7 +132,7 @@ class JookiToken:
     tag_id: str = ""
     name: str = ""
     star_id: str | None = None
-    seen: int | None = None
+    seen: int | None = None  # Play count (number of times figurine placed)
 
 
 @dataclass
@@ -143,11 +143,11 @@ class JookiTrack:
     title: str = ""
     artist: str | None = None
     album: str | None = None
-    duration: int | None = None
+    duration: int | None = None  # Duration in SECONDS (not milliseconds)
     filename: str | None = None
-    format: str | None = None
+    format: str | None = None  # e.g. "ID3 tag" for MP3
     has_image: bool = False
-    size: int | None = None
+    size: int | None = None  # File size in bytes
 
 
 @dataclass
