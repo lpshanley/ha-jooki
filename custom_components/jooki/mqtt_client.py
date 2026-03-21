@@ -11,7 +11,13 @@ import paho.mqtt.client as mqtt
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
-from .const import DEVICE_VERSION_V2, JookiDeviceConfig, SIGNAL_STATE_UPDATED
+from .const import (
+    DEVICE_VERSION_V2,
+    SIGNAL_BUTTON_EVENT,
+    SIGNAL_NFC_EVENT,
+    SIGNAL_STATE_UPDATED,
+    JookiDeviceConfig,
+)
 from .models import JookiState
 
 _LOGGER = logging.getLogger(__name__)
@@ -36,6 +42,8 @@ class JookiMqttClient:
         self._device_config = device_config
         self._state = JookiState()
         self._signal = SIGNAL_STATE_UPDATED.format(entry_id)
+        self._signal_nfc = SIGNAL_NFC_EVENT.format(entry_id)
+        self._signal_button = SIGNAL_BUTTON_EVENT.format(entry_id)
 
         self._client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
         self._client.on_connect = self._on_connect
@@ -81,11 +89,7 @@ class JookiMqttClient:
         await self._hass.async_add_executor_job(self._client.publish, topic, payload)
 
     async def async_resync(self) -> None:
-        """Send CONNECT handshake + GET_STATE to request a full state dump.
-
-        This can be called on demand (e.g., from a button entity) to force
-        the device to re-send its complete state.
-        """
+        """Send CONNECT handshake + GET_STATE to request a full state dump."""
         cfg = self._device_config
         connect_payload = json.dumps({
             "jooki": {
@@ -112,15 +116,22 @@ class JookiMqttClient:
             return
 
         _LOGGER.debug("Connected to Jooki at %s:%s", self._host, self._port)
-        client.subscribe(self._device_config.topic_state)
+        cfg = self._device_config
 
-        # Reset state for accumulation. V2 will receive a burst of partial
-        # updates on reconnect; v1 will get a single full state message.
+        # Subscribe to all topics we care about
+        client.subscribe(cfg.topic_state)
+        client.subscribe(cfg.topic_error)
+        client.subscribe(cfg.topic_nfc_tag)
+        client.subscribe(cfg.topic_nfc_tag_removed)
+        client.subscribe(cfg.topic_gpio_next)
+        client.subscribe(cfg.topic_gpio_prev)
+        client.subscribe(cfg.topic_gpio_circle)
+
+        # Reset state for accumulation
         self._state = JookiState(available=True)
-        self._dispatch()
+        self._dispatch_state()
 
-        # Request a full state dump so we immediately have complete state
-        # rather than waiting for individual partials to trickle in.
+        # Request full state dump
         self._send_connect_handshake()
         self._request_full_state()
 
@@ -133,9 +144,7 @@ class JookiMqttClient:
                 "label": self._host,
             }
         })
-        self._client.publish(
-            self._device_config.topic_connect, connect_payload
-        )
+        self._client.publish(self._device_config.topic_connect, connect_payload)
 
     def _request_full_state(self) -> None:
         """Send GET_STATE to request a full state dump (runs on paho thread)."""
@@ -154,12 +163,28 @@ class JookiMqttClient:
             "Disconnected from Jooki at %s:%s (rc=%s)", self._host, self._port, rc
         )
         self._state = JookiState(available=False)
-        self._dispatch()
+        self._dispatch_state()
 
     def _on_message(
         self, client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage
     ) -> None:
-        """Handle incoming MQTT message."""
+        """Handle incoming MQTT message — route by topic."""
+        topic = msg.topic
+        cfg = self._device_config
+
+        if topic == cfg.topic_state:
+            self._handle_state_message(msg)
+        elif topic == cfg.topic_nfc_tag:
+            self._handle_nfc_tag(msg)
+        elif topic == cfg.topic_nfc_tag_removed:
+            self._handle_nfc_tag_removed()
+        elif topic in (cfg.topic_gpio_next, cfg.topic_gpio_prev, cfg.topic_gpio_circle):
+            self._handle_gpio_button(topic, msg)
+        elif topic == cfg.topic_error:
+            self._handle_error(msg)
+
+    def _handle_state_message(self, msg: mqtt.MQTTMessage) -> None:
+        """Handle a state update from /j/web/output/state."""
         try:
             payload = json.loads(msg.payload)
         except (json.JSONDecodeError, UnicodeDecodeError):
@@ -167,17 +192,74 @@ class JookiMqttClient:
             return
 
         if self.is_v2:
-            # V2: partial update — deep-merge into accumulated state.
-            # Also handles the full dump from GET_STATE (all keys in one
-            # message) since merge_partial deep-merges all top-level keys.
             self._state.merge_partial(payload)
         else:
-            # V1: full-replace — each message is the complete state
             self._state = JookiState.from_json(payload)
 
-        self._dispatch()
+        self._dispatch_state()
 
-    def _dispatch(self) -> None:
+    def _handle_nfc_tag(self, msg: mqtt.MQTTMessage) -> None:
+        """Handle NFC figurine placed event."""
+        try:
+            parts = msg.payload.decode().split(",")
+            tag_id = parts[0] if len(parts) >= 1 else ""
+            star_id = parts[1] if len(parts) >= 2 else ""
+        except (UnicodeDecodeError, IndexError):
+            _LOGGER.warning("Invalid NFC tag payload: %s", msg.payload[:100])
+            return
+
+        self._hass.loop.call_soon_threadsafe(
+            async_dispatcher_send,
+            self._hass,
+            self._signal_nfc,
+            "figurine_placed",
+            {"tag_id": tag_id, "star_id": star_id},
+        )
+
+    def _handle_nfc_tag_removed(self) -> None:
+        """Handle NFC figurine removed event."""
+        self._hass.loop.call_soon_threadsafe(
+            async_dispatcher_send,
+            self._hass,
+            self._signal_nfc,
+            "figurine_removed",
+            {},
+        )
+
+    def _handle_gpio_button(self, topic: str, msg: mqtt.MQTTMessage) -> None:
+        """Handle a GPIO button press/release event."""
+        cfg = self._device_config
+        button_map = {
+            cfg.topic_gpio_next: "next",
+            cfg.topic_gpio_prev: "previous",
+            cfg.topic_gpio_circle: "circle",
+        }
+        button_name = button_map.get(topic, "unknown")
+
+        try:
+            value = msg.payload.decode().strip()
+            event_type = "pressed" if value == "1" else "released"
+        except UnicodeDecodeError:
+            return
+
+        self._hass.loop.call_soon_threadsafe(
+            async_dispatcher_send,
+            self._hass,
+            self._signal_button,
+            button_name,
+            event_type,
+        )
+
+    def _handle_error(self, msg: mqtt.MQTTMessage) -> None:
+        """Handle an error/info message from the device."""
+        try:
+            payload = json.loads(msg.payload)
+            error_msg = payload.get("msg", "Unknown error")
+            _LOGGER.info("Jooki device message: %s", error_msg)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            _LOGGER.warning("Invalid error payload from Jooki: %s", msg.payload[:200])
+
+    def _dispatch_state(self) -> None:
         """Send a state update signal to the HA event loop."""
         self._hass.loop.call_soon_threadsafe(
             async_dispatcher_send, self._hass, self._signal

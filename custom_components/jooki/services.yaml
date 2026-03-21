@@ -1,0 +1,47 @@
+create_playlist:
+  name: Create Playlist
+  description: Create a new playlist on the Jooki device.
+  fields:
+    device_id:
+      name: Device
+      description: The Jooki device to create the playlist on.
+      required: true
+      selector:
+        device:
+          integration: jooki
+    title:
+      name: Title
+      description: Playlist title (leave empty for auto-generated name).
+      required: false
+      selector:
+        text:
+    audiobook:
+      name: Audiobook
+      description: Whether this is an audiobook playlist.
+      default: false
+      selector:
+        boolean:
+
+rename_figurine:
+  name: Rename Figurine
+  description: Rename an NFC figurine on the Jooki device.
+  fields:
+    device_id:
+      name: Device
+      description: The Jooki device with the figurine.
+      required: true
+      selector:
+        device:
+          integration: jooki
+    tag_id:
+      name: Tag ID
+      description: NFC tag hardware ID (e.g., "04333122237381").
+      required: true
+      selector:
+        text:
+    name:
+      name: Name
+      description: New display name for the figurine.
+      required: true
+      selector:
+        text:

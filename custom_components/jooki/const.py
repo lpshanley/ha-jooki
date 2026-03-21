@@ -15,13 +15,23 @@ CONF_DEVICE_VERSION = "device_version"
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
     Platform.BUTTON,
+    Platform.EVENT,
     Platform.LIGHT,
     Platform.MEDIA_PLAYER,
+    Platform.SELECT,
     Platform.SENSOR,
+    Platform.SWITCH,
 ]
 
-# Dispatcher signal (formatted with entry_id)
+# Dispatcher signals (formatted with entry_id)
 SIGNAL_STATE_UPDATED = f"{DOMAIN}_state_updated_{{}}"
+SIGNAL_NFC_EVENT = f"{DOMAIN}_nfc_event_{{}}"
+SIGNAL_BUTTON_EVENT = f"{DOMAIN}_button_event_{{}}"
+
+# Media content types for media browser
+MEDIA_TYPE_PLAYLIST = "playlist"
+MEDIA_TYPE_FIGURINE = "figurine"
+MEDIA_TYPE_TRACK = "track"
 
 
 # ---------------------------------------------------------------------------
@@ -42,6 +52,7 @@ class JookiDeviceConfig:
 
     # MQTT topics — state
     topic_state: str
+    topic_error: str
 
     # MQTT topics — commands
     topic_set_vol: str
@@ -54,21 +65,36 @@ class JookiDeviceConfig:
     topic_set_cfg: str
     topic_get_state: str
     topic_connect: str
+    topic_set_toy_safe: str
+    topic_playlist_new: str
+    topic_playlist_update: str
+    topic_token_edit: str
+
+    # MQTT topics — NFC
+    topic_nfc_tag: str
+    topic_nfc_tag_removed: str
+
+    # MQTT topics — GPIO (buttons)
+    topic_gpio_next: str
+    topic_gpio_prev: str
+    topic_gpio_circle: str
 
     # MQTT topics — LEDs
     topic_led_set_raw: str
     topic_led_pulse_raw: str
+    topic_led_charge_state: str
 
     # LED identifiers
     led_ids: tuple[str, ...]
 
 
-# -- Jooki v1 (original) ---------------------------------------------------
+# -- Jooki J1000 (original) ------------------------------------------------
 
 DEVICE_CONFIG_V1 = JookiDeviceConfig(
     version=DEVICE_VERSION_V1,
     model_name="Jooki J1000",
     topic_state="/j/web/output/state",
+    topic_error="/j/web/output/error",
     topic_set_vol="/j/web/input/SET_VOL",
     topic_do_play="/j/web/input/DO_PLAY",
     topic_do_pause="/j/web/input/DO_PAUSE",
@@ -79,8 +105,18 @@ DEVICE_CONFIG_V1 = JookiDeviceConfig(
     topic_set_cfg="/j/web/input/SET_CFG",
     topic_get_state="/j/web/input/GET_STATE",
     topic_connect="/j/web/input/CONNECT",
+    topic_set_toy_safe="/j/web/input/SET_TOY_SAFE",
+    topic_playlist_new="/j/web/input/PLAYLIST_NEW",
+    topic_playlist_update="/j/web/input/PLAYLIST_UPDATE",
+    topic_token_edit="/j/web/input/TOKEN_EDIT",
+    topic_nfc_tag="/j/nfc/input/tag",
+    topic_nfc_tag_removed="/j/nfc/input/tag_removed",
+    topic_gpio_next="/j/gpio/input/next",
+    topic_gpio_prev="/j/gpio/input/prev",
+    topic_gpio_circle="/j/gpio/input/circle",
     topic_led_set_raw="/j/led/output/set_raw",
     topic_led_pulse_raw="/j/led/output/pulse_raw",
+    topic_led_charge_state="/j/led/output/charge_state",
     led_ids=("ALL", "CIRCLE", "NEXT", "VOL_INC", "VOL_DEC", "PREV", "RING"),
 )
 
@@ -90,6 +126,7 @@ DEVICE_CONFIG_V2 = JookiDeviceConfig(
     version=DEVICE_VERSION_V2,
     model_name="Jooki J2000",
     topic_state="/j/web/output/state",
+    topic_error="/j/web/output/error",
     topic_set_vol="/j/web/input/SET_VOL",
     topic_do_play="/j/web/input/DO_PLAY",
     topic_do_pause="/j/web/input/DO_PAUSE",
@@ -100,8 +137,18 @@ DEVICE_CONFIG_V2 = JookiDeviceConfig(
     topic_set_cfg="/j/web/input/SET_CFG",
     topic_get_state="/j/web/input/GET_STATE",
     topic_connect="/j/web/input/CONNECT",
+    topic_set_toy_safe="/j/web/input/SET_TOY_SAFE",
+    topic_playlist_new="/j/web/input/PLAYLIST_NEW",
+    topic_playlist_update="/j/web/input/PLAYLIST_UPDATE",
+    topic_token_edit="/j/web/input/TOKEN_EDIT",
+    topic_nfc_tag="/j/nfc/input/tag",
+    topic_nfc_tag_removed="/j/nfc/input/tag_removed",
+    topic_gpio_next="/j/gpio/input/next",
+    topic_gpio_prev="/j/gpio/input/prev",
+    topic_gpio_circle="/j/gpio/input/circle",
     topic_led_set_raw="/j/led/output/set_raw",
     topic_led_pulse_raw="/j/led/output/pulse_raw",
+    topic_led_charge_state="/j/led/output/charge_state",
     led_ids=("ALL", "CIRCLE", "NEXT", "VOL_INC", "VOL_DEC", "PREV", "RING"),
 )
 

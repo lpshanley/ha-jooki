@@ -3,23 +3,34 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from typing import Any
 
 from homeassistant.components.media_player import (
+    BrowseMedia,
     MediaPlayerEntity,
     MediaPlayerEntityFeature,
     MediaPlayerState,
+    MediaType,
     RepeatMode,
 )
-from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util.dt import utcnow
 
 from . import JookiConfigEntry
-from .const import DOMAIN, MAX_VOLUME, SIGNAL_STATE_UPDATED
+from .const import (
+    DOMAIN,
+    MAX_VOLUME,
+    MEDIA_TYPE_FIGURINE,
+    MEDIA_TYPE_PLAYLIST,
+    MEDIA_TYPE_TRACK,
+    SIGNAL_STATE_UPDATED,
+)
 from .mqtt_client import JookiMqttClient
 
 _PLAYBACK_STATE_MAP = {
@@ -63,6 +74,8 @@ class JookiMediaPlayer(MediaPlayerEntity):
         | MediaPlayerEntityFeature.TURN_OFF
         | MediaPlayerEntityFeature.REPEAT_SET
         | MediaPlayerEntityFeature.SHUFFLE_SET
+        | MediaPlayerEntityFeature.BROWSE_MEDIA
+        | MediaPlayerEntityFeature.PLAY_MEDIA
     )
 
     def __init__(self, client: JookiMqttClient, entry: JookiConfigEntry) -> None:
@@ -80,6 +93,7 @@ class JookiMediaPlayer(MediaPlayerEntity):
         )
         self._signal = SIGNAL_STATE_UPDATED.format(entry.entry_id)
         self._device_info_enriched = False
+        self._position_updated_at: datetime | None = None
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to state updates."""
@@ -91,6 +105,9 @@ class JookiMediaPlayer(MediaPlayerEntity):
     def _handle_update(self) -> None:
         """Handle a state update from the MQTT client."""
         self._enrich_device_info()
+        # Update position timestamp only when the device reports a position
+        if self._client.state.playback.position_ms is not None:
+            self._position_updated_at = utcnow()
         self.async_write_ha_state()
 
     def _enrich_device_info(self) -> None:
@@ -177,6 +194,16 @@ class JookiMediaPlayer(MediaPlayerEntity):
             return pos // 1000
         return None
 
+    @property
+    def media_position_updated_at(self) -> datetime | None:
+        """Return when the position was last updated.
+
+        HA uses this to interpolate the seek bar between updates.
+        Stored on each state update rather than computed on read so the
+        timestamp is stable between property accesses.
+        """
+        return self._position_updated_at
+
     # ------------------------------------------------------------------
     # Repeat / Shuffle
     # ------------------------------------------------------------------
@@ -192,8 +219,194 @@ class JookiMediaPlayer(MediaPlayerEntity):
         return self._client.state.audio_config.shuffle_mode
 
     # ------------------------------------------------------------------
+    # Media browser
+    # ------------------------------------------------------------------
+
+    async def async_browse_media(
+        self,
+        media_content_type: str | None = None,
+        media_content_id: str | None = None,
+    ) -> BrowseMedia:
+        """Implement the media browser."""
+        if media_content_type is None or media_content_id is None:
+            return self._build_root_browse()
+
+        if media_content_id == "playlists":
+            return self._build_playlists_browse()
+
+        if media_content_id == "figurines":
+            return self._build_figurines_browse()
+
+        if media_content_type == MEDIA_TYPE_PLAYLIST:
+            return self._build_playlist_detail(media_content_id)
+
+        return self._build_root_browse()
+
+    def _build_root_browse(self) -> BrowseMedia:
+        """Build the root media browser with Playlists and Figurines folders."""
+        children = [
+            BrowseMedia(
+                title="Playlists",
+                media_class=MediaType.PLAYLIST,
+                media_content_type=MEDIA_TYPE_PLAYLIST,
+                media_content_id="playlists",
+                can_play=False,
+                can_expand=True,
+                thumbnail=None,
+            ),
+            BrowseMedia(
+                title="Figurines",
+                media_class=MediaType.PLAYLIST,
+                media_content_type=MEDIA_TYPE_FIGURINE,
+                media_content_id="figurines",
+                can_play=False,
+                can_expand=True,
+                thumbnail=None,
+            ),
+        ]
+        return BrowseMedia(
+            title="Jooki",
+            media_class=MediaType.APP,
+            media_content_type="root",
+            media_content_id="root",
+            can_play=False,
+            can_expand=True,
+            children=children,
+        )
+
+    def _build_playlists_browse(self) -> BrowseMedia:
+        """Build the playlists folder listing."""
+        db = self._client.state.db
+        children = []
+        for pid, playlist in db.playlists.items():
+            has_tracks = bool(playlist.tracks) or playlist.spotify_uri
+            children.append(
+                BrowseMedia(
+                    title=playlist.title or pid,
+                    media_class=MediaType.PLAYLIST,
+                    media_content_type=MEDIA_TYPE_PLAYLIST,
+                    media_content_id=pid,
+                    can_play=has_tracks,
+                    can_expand=bool(playlist.tracks),
+                    thumbnail=playlist.image,
+                )
+            )
+        return BrowseMedia(
+            title="Playlists",
+            media_class=MediaType.PLAYLIST,
+            media_content_type=MEDIA_TYPE_PLAYLIST,
+            media_content_id="playlists",
+            can_play=False,
+            can_expand=True,
+            children=children,
+        )
+
+    def _build_figurines_browse(self) -> BrowseMedia:
+        """Build the figurines folder listing."""
+        db = self._client.state.db
+        children = []
+        for tid, token in db.tokens.items():
+            children.append(
+                BrowseMedia(
+                    title=f"{token.name} ({token.star_id})" if token.star_id else token.name,
+                    media_class=MediaType.PLAYLIST,
+                    media_content_type=MEDIA_TYPE_FIGURINE,
+                    media_content_id=tid,
+                    can_play=True,
+                    can_expand=False,
+                    thumbnail=None,
+                )
+            )
+        return BrowseMedia(
+            title="Figurines",
+            media_class=MediaType.PLAYLIST,
+            media_content_type=MEDIA_TYPE_FIGURINE,
+            media_content_id="figurines",
+            can_play=False,
+            can_expand=True,
+            children=children,
+        )
+
+    def _build_playlist_detail(self, playlist_id: str) -> BrowseMedia:
+        """Build track listing for a local playlist."""
+        db = self._client.state.db
+        playlist = db.playlists.get(playlist_id)
+        children = []
+        if playlist:
+            for track_id in playlist.tracks:
+                track = db.tracks.get(track_id)
+                title = track.title if track else track_id
+                children.append(
+                    BrowseMedia(
+                        title=title,
+                        media_class=MediaType.TRACK,
+                        media_content_type=MEDIA_TYPE_TRACK,
+                        media_content_id=track_id,
+                        can_play=False,
+                        can_expand=False,
+                        thumbnail=None,
+                    )
+                )
+        return BrowseMedia(
+            title=playlist.title if playlist else playlist_id,
+            media_class=MediaType.PLAYLIST,
+            media_content_type=MEDIA_TYPE_PLAYLIST,
+            media_content_id=playlist_id,
+            can_play=True,
+            can_expand=True,
+            children=children,
+        )
+
+    # ------------------------------------------------------------------
     # Commands
     # ------------------------------------------------------------------
+
+    async def async_play_media(
+        self,
+        media_content_type: str,
+        media_content_id: str,
+        **kwargs: Any,
+    ) -> None:
+        """Play media by simulating figurine placement or playlist selection."""
+        db = self._client.state.db
+
+        if media_content_type == MEDIA_TYPE_FIGURINE:
+            token = db.tokens.get(media_content_id)
+            if not token:
+                raise HomeAssistantError(
+                    f"Figurine with tag ID '{media_content_id}' not found on device"
+                )
+            if not token.star_id:
+                raise HomeAssistantError(
+                    f"Figurine '{token.name}' has no star ID assigned"
+                )
+            await self._client.async_publish(
+                self._cfg.topic_nfc_tag,
+                f"{media_content_id},{token.star_id}",
+            )
+            return
+
+        if media_content_type == MEDIA_TYPE_PLAYLIST:
+            playlist = db.playlists.get(media_content_id)
+            if not playlist:
+                raise HomeAssistantError(
+                    f"Playlist '{media_content_id}' not found on device"
+                )
+            if not playlist.tag_id:
+                raise HomeAssistantError(
+                    f"Playlist '{playlist.title}' has no figurine bound to it"
+                )
+            token = db.tokens.get(playlist.tag_id)
+            star_id = token.star_id if token else "0"
+            await self._client.async_publish(
+                self._cfg.topic_nfc_tag,
+                f"{playlist.tag_id},{star_id}",
+            )
+            return
+
+        raise HomeAssistantError(
+            f"Unsupported media type '{media_content_type}'"
+        )
 
     async def async_media_play(self) -> None:
         """Send play command."""

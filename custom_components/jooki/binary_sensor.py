@@ -60,6 +60,15 @@ async def async_setup_entry(
             device_class=BinarySensorDeviceClass.PRESENCE,
             value_fn=lambda s: s.nfc.present,
         ),
+        JookiBinarySensor(
+            client=client,
+            entry=entry,
+            key="spotify_connected",
+            name="Spotify Connected",
+            device_class=BinarySensorDeviceClass.CONNECTIVITY,
+            value_fn=lambda s: s.spotify.active,
+            entity_category=EntityCategory.DIAGNOSTIC,
+        ),
     ])
 
 
