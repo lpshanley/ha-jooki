@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-import paho.mqtt.client as mqtt
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
@@ -16,6 +15,7 @@ from .const import (
     DEFAULT_NAME,
     DEFAULT_PORT,
     DEVICE_VERSION_V1,
+    DEVICE_VERSION_V2,
     DEVICE_VERSIONS,
     DOMAIN,
 )
@@ -41,6 +41,10 @@ STATE_TOPIC = "/j/web/output/state"
 
 def _test_mqtt_connection(host: str, port: int) -> bool:
     """Test MQTT connection to a Jooki device (runs in executor)."""
+    import time
+
+    import paho.mqtt.client as mqtt
+
     connected = False
 
     def on_connect(client: mqtt.Client, userdata: Any, flags: Any, rc: int, properties: Any = None) -> None:
@@ -55,7 +59,6 @@ def _test_mqtt_connection(host: str, port: int) -> bool:
     try:
         client.connect(host, port, keepalive=5)
         client.loop_start()
-        import time
         deadline = time.monotonic() + 5
         while not connected and time.monotonic() < deadline:
             time.sleep(0.1)
