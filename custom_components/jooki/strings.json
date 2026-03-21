@@ -1,0 +1,26 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Jooki",
+        "description": "Enter the connection details for your Jooki device.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "name": "Device name"
+        },
+        "data_description": {
+          "host": "IP address or hostname of your Jooki",
+          "port": "MQTT broker port (default 1883)",
+          "name": "Friendly name for this Jooki device"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the Jooki MQTT broker. Check the host and port."
+    },
+    "abort": {
+      "already_configured": "This Jooki device is already configured."
+    }
+  }
+}

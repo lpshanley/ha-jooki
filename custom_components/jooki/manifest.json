@@ -1,0 +1,14 @@
+{
+  "domain": "jooki",
+  "name": "Jooki",
+  "codeowners": ["@lpshanley"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/lpshanley/ha-jooki",
+  "integration_type": "device",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/lpshanley/ha-jooki/issues",
+  "loggers": ["custom_components.jooki"],
+  "requirements": ["paho-mqtt==2.1.0"],
+  "version": "0.1.0"
+}
