@@ -1,0 +1,14 @@
+changelog:
+  categories:
+    - title: "\U0001F4A5 Breaking Changes"
+      labels:
+        - breaking-change
+    - title: "\u2728 New Features"
+      labels:
+        - enhancement
+    - title: "\U0001F41B Bug Fixes"
+      labels:
+        - bug
+    - title: "\U0001F527 Maintenance"
+      labels:
+        - chore

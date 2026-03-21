@@ -54,6 +54,34 @@ Once configured, the integration creates a single device with four entities:
 - LED state is **optimistic** — the Jooki does not report its LED state, so the integration tracks it locally.
 - The volume range is assumed to be 0-100. This may need calibration for your device.
 
+## Contributing
+
+1. Fork the repository and create a feature branch from `main`
+2. Use conventional commit messages: `feat:`, `fix:`, `chore:`, `docs:`, etc.
+3. Open a pull request and add a label for changelog categorization:
+   - `enhancement` — new features
+   - `bug` — bug fixes
+   - `breaking-change` — breaking changes
+   - `chore` — maintenance
+4. PRs are automatically validated with [hassfest](https://developers.home-assistant.io/docs/creating_integration_manifest/) and [HACS action](https://github.com/hacs/action)
+
+## Releasing
+
+Releases are automated via GitHub Actions. To publish a new version:
+
+1. Merge PRs to `main` with appropriate labels
+2. Go to **Releases** → **Draft a new release**
+3. Create a new tag using semantic versioning (e.g. `0.2.0`)
+4. Click **Generate release notes** — PRs are auto-categorized by label
+5. Click **Publish release**
+
+The release workflow automatically:
+- Stamps the tag version into `manifest.json`
+- Packages the integration into a ZIP
+- Uploads `jooki.zip` as a release asset
+
+HACS picks up new releases automatically.
+
 ## Credits
 
 MQTT protocol details based on the reverse engineering work documented at [there.oughta.be](https://there.oughta.be/an/interface-for-jooki).

@@ -9,6 +9,7 @@ from homeassistant.components.media_player import (
     MediaPlayerEntity,
     MediaPlayerEntityFeature,
     MediaPlayerState,
+    RepeatMode,
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -22,6 +23,12 @@ from .mqtt_client import JookiMqttClient
 _PLAYBACK_STATE_MAP = {
     "playing": MediaPlayerState.PLAYING,
     "paused": MediaPlayerState.PAUSED,
+}
+
+_REPEAT_MODE_MAP = {
+    0: RepeatMode.OFF,
+    1: RepeatMode.ALL,
+    2: RepeatMode.ONE,
 }
 
 
@@ -73,6 +80,10 @@ class JookiMediaPlayer(MediaPlayerEntity):
         """Handle a state update from the MQTT client."""
         self.async_write_ha_state()
 
+    # ------------------------------------------------------------------
+    # State properties
+    # ------------------------------------------------------------------
+
     @property
     def available(self) -> bool:
         """Return True if the device is available."""
@@ -89,6 +100,10 @@ class JookiMediaPlayer(MediaPlayerEntity):
         """Return the volume level (0.0 to 1.0)."""
         return self._client.state.playback.volume / MAX_VOLUME
 
+    # ------------------------------------------------------------------
+    # Media metadata
+    # ------------------------------------------------------------------
+
     @property
     def media_title(self) -> str | None:
         """Return the current track name."""
@@ -98,6 +113,50 @@ class JookiMediaPlayer(MediaPlayerEntity):
     def media_album_name(self) -> str | None:
         """Return the current album name."""
         return self._client.state.playback.album
+
+    @property
+    def media_artist(self) -> str | None:
+        """Return the current artist name (v2)."""
+        return self._client.state.now_playing.artist
+
+    @property
+    def media_image_url(self) -> str | None:
+        """Return the album art URL (v2)."""
+        return self._client.state.now_playing.image
+
+    @property
+    def media_duration(self) -> int | None:
+        """Return the track duration in seconds (v2)."""
+        dur = self._client.state.now_playing.duration_ms
+        if dur is not None:
+            return dur // 1000
+        return None
+
+    @property
+    def media_position(self) -> int | None:
+        """Return the current playback position in seconds."""
+        pos = self._client.state.playback.position_ms
+        if pos is not None:
+            return pos // 1000
+        return None
+
+    # ------------------------------------------------------------------
+    # Repeat / Shuffle (read-only — no SET commands yet)
+    # ------------------------------------------------------------------
+
+    @property
+    def repeat(self) -> RepeatMode | None:
+        """Return the current repeat mode (v2)."""
+        return _REPEAT_MODE_MAP.get(self._client.state.audio_config.repeat_mode)
+
+    @property
+    def shuffle(self) -> bool | None:
+        """Return the current shuffle state (v2)."""
+        return self._client.state.audio_config.shuffle_mode
+
+    # ------------------------------------------------------------------
+    # Commands
+    # ------------------------------------------------------------------
 
     async def async_media_play(self) -> None:
         """Send play command."""

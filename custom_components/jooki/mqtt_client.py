@@ -11,7 +11,7 @@ import paho.mqtt.client as mqtt
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
-from .const import JookiDeviceConfig, SIGNAL_STATE_UPDATED
+from .const import DEVICE_VERSION_V2, JookiDeviceConfig, SIGNAL_STATE_UPDATED
 from .models import JookiState
 
 _LOGGER = logging.getLogger(__name__)
@@ -53,6 +53,11 @@ class JookiMqttClient:
         """Return the version-specific device configuration."""
         return self._device_config
 
+    @property
+    def is_v2(self) -> bool:
+        """Return True if this is a v2 device."""
+        return self._device_config.version == DEVICE_VERSION_V2
+
     async def async_start(self) -> None:
         """Start the MQTT client connection."""
         await self._hass.async_add_executor_job(self._start)
@@ -90,6 +95,9 @@ class JookiMqttClient:
 
         _LOGGER.debug("Connected to Jooki at %s:%s", self._host, self._port)
         client.subscribe(self._device_config.topic_state)
+
+        # Reset state for accumulation. V2 will receive a burst of partial
+        # updates on reconnect; v1 will get a single full state message.
         self._state = JookiState(available=True)
         self._dispatch()
 
@@ -118,7 +126,13 @@ class JookiMqttClient:
             _LOGGER.warning("Invalid JSON from Jooki: %s", msg.payload[:200])
             return
 
-        self._state = JookiState.from_json(payload)
+        if self.is_v2:
+            # V2: partial update — deep-merge into accumulated state
+            self._state.merge_partial(payload)
+        else:
+            # V1: full-replace — each message is the complete state
+            self._state = JookiState.from_json(payload)
+
         self._dispatch()
 
     def _dispatch(self) -> None:
