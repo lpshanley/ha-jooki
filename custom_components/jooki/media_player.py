@@ -431,7 +431,7 @@ class JookiMediaPlayer(MediaPlayerEntity):
             self._cfg.topic_set_vol, json.dumps({"vol": str(scaled)})
         )
 
-    async def async_set_repeat_mode(self, repeat: RepeatMode) -> None:
+    async def async_set_repeat(self, repeat: RepeatMode) -> None:
         """Set repeat mode."""
         mode = _HA_TO_JOOKI_REPEAT.get(repeat, 0)
         await self._client.async_publish(
