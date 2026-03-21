@@ -11,7 +11,7 @@ import paho.mqtt.client as mqtt
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
-from .const import SIGNAL_STATE_UPDATED, TOPIC_STATE
+from .const import JookiDeviceConfig, SIGNAL_STATE_UPDATED
 from .models import JookiState
 
 _LOGGER = logging.getLogger(__name__)
@@ -21,13 +21,19 @@ class JookiMqttClient:
     """Manage the MQTT connection to a Jooki device."""
 
     def __init__(
-        self, hass: HomeAssistant, host: str, port: int, entry_id: str
+        self,
+        hass: HomeAssistant,
+        host: str,
+        port: int,
+        entry_id: str,
+        device_config: JookiDeviceConfig,
     ) -> None:
         """Initialize the MQTT client."""
         self._hass = hass
         self._host = host
         self._port = port
         self._entry_id = entry_id
+        self._device_config = device_config
         self._state = JookiState()
         self._signal = SIGNAL_STATE_UPDATED.format(entry_id)
 
@@ -41,6 +47,11 @@ class JookiMqttClient:
     def state(self) -> JookiState:
         """Return the current device state."""
         return self._state
+
+    @property
+    def device_config(self) -> JookiDeviceConfig:
+        """Return the version-specific device configuration."""
+        return self._device_config
 
     async def async_start(self) -> None:
         """Start the MQTT client connection."""
@@ -78,7 +89,7 @@ class JookiMqttClient:
             return
 
         _LOGGER.debug("Connected to Jooki at %s:%s", self._host, self._port)
-        client.subscribe(TOPIC_STATE)
+        client.subscribe(self._device_config.topic_state)
         self._state = JookiState(available=True)
         self._dispatch()
 

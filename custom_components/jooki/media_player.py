@@ -16,17 +16,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import JookiConfigEntry
-from .const import (
-    DOMAIN,
-    MAX_VOLUME,
-    SIGNAL_STATE_UPDATED,
-    TOPIC_DO_NEXT,
-    TOPIC_DO_PAUSE,
-    TOPIC_DO_PLAY,
-    TOPIC_DO_PREV,
-    TOPIC_SET_VOL,
-    TOPIC_SHUTDOWN,
-)
+from .const import DOMAIN, MAX_VOLUME, SIGNAL_STATE_UPDATED
 from .mqtt_client import JookiMqttClient
 
 _PLAYBACK_STATE_MAP = {
@@ -61,12 +51,14 @@ class JookiMediaPlayer(MediaPlayerEntity):
     def __init__(self, client: JookiMqttClient, entry: JookiConfigEntry) -> None:
         """Initialize the media player."""
         self._client = client
+        self._cfg = client.device_config
         self._attr_unique_id = f"{entry.entry_id}_media_player"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
             name=entry.title,
             manufacturer="Jooki",
-            model="Jooki Player",
+            model=self._cfg.model_name,
+            sw_version=self._cfg.version,
         )
         self._signal = SIGNAL_STATE_UPDATED.format(entry.entry_id)
 
@@ -109,27 +101,27 @@ class JookiMediaPlayer(MediaPlayerEntity):
 
     async def async_media_play(self) -> None:
         """Send play command."""
-        await self._client.async_publish(TOPIC_DO_PLAY)
+        await self._client.async_publish(self._cfg.topic_do_play)
 
     async def async_media_pause(self) -> None:
         """Send pause command."""
-        await self._client.async_publish(TOPIC_DO_PAUSE)
+        await self._client.async_publish(self._cfg.topic_do_pause)
 
     async def async_media_next_track(self) -> None:
         """Send next track command."""
-        await self._client.async_publish(TOPIC_DO_NEXT)
+        await self._client.async_publish(self._cfg.topic_do_next)
 
     async def async_media_previous_track(self) -> None:
         """Send previous track command."""
-        await self._client.async_publish(TOPIC_DO_PREV)
+        await self._client.async_publish(self._cfg.topic_do_prev)
 
     async def async_set_volume_level(self, volume: float) -> None:
         """Set volume level (0.0 to 1.0)."""
         scaled = int(volume * MAX_VOLUME)
         await self._client.async_publish(
-            TOPIC_SET_VOL, json.dumps({"vol": str(scaled)})
+            self._cfg.topic_set_vol, json.dumps({"vol": str(scaled)})
         )
 
     async def async_turn_off(self) -> None:
         """Shut down the Jooki."""
-        await self._client.async_publish(TOPIC_SHUTDOWN)
+        await self._client.async_publish(self._cfg.topic_shutdown)

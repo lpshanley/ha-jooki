@@ -11,7 +11,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import JookiConfigEntry
-from .const import DOMAIN, SIGNAL_STATE_UPDATED, TOPIC_LED_SET_RAW
+from .const import DOMAIN, SIGNAL_STATE_UPDATED
 from .mqtt_client import JookiMqttClient
 
 
@@ -35,6 +35,7 @@ class JookiLedLight(LightEntity):
     def __init__(self, client: JookiMqttClient, entry: JookiConfigEntry) -> None:
         """Initialize the LED ring light."""
         self._client = client
+        self._cfg = client.device_config
         self._attr_unique_id = f"{entry.entry_id}_led_ring"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
@@ -74,12 +75,12 @@ class JookiLedLight(LightEntity):
         if "rgb_color" in kwargs:
             self._rgb_color = tuple(int(c) for c in kwargs["rgb_color"])
         r, g, b = self._rgb_color
-        await self._client.async_publish(TOPIC_LED_SET_RAW, f"ALL,{r},{g},{b}")
+        await self._client.async_publish(self._cfg.topic_led_set_raw, f"ALL,{r},{g},{b}")
         self._is_on = True
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the LED ring."""
-        await self._client.async_publish(TOPIC_LED_SET_RAW, "ALL,0,0,0")
+        await self._client.async_publish(self._cfg.topic_led_set_raw, "ALL,0,0,0")
         self._is_on = False
         self.async_write_ha_state()
