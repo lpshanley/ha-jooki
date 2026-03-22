@@ -364,41 +364,41 @@ class JookiMediaPlayer(MediaPlayerEntity):
 
     async def async_play_media(
         self,
-        media_content_type: str,
-        media_content_id: str,
+        media_type: str,
+        media_id: str,
         **kwargs: Any,
     ) -> None:
         """Play a playlist or figurine via the PLAYLIST_PLAY command."""
         db = self._client.state.db
 
-        if media_content_type == MEDIA_TYPE_FIGURINE:
+        if media_type == MEDIA_TYPE_FIGURINE:
             # Resolve figurine → playlist by matching tag_id
-            playlist_id = self._find_playlist_for_token(media_content_id)
+            playlist_id = self._find_playlist_for_token(media_id)
             if playlist_id:
                 await self._play_playlist(playlist_id)
                 return
             # Fallback: simulate NFC placement if no playlist found
-            token = db.tokens.get(media_content_id)
+            token = db.tokens.get(media_id)
             if not token:
                 raise HomeAssistantError(
-                    f"Figurine with tag ID '{media_content_id}' not found"
+                    f"Figurine with tag ID '{media_id}' not found"
                 )
             await self._client.async_publish(
                 self._cfg.topic_nfc_tag,
-                f"{media_content_id},{token.star_id or '0'}",
+                f"{media_id},{token.star_id or '0'}",
             )
             return
 
-        if media_content_type == MEDIA_TYPE_PLAYLIST:
-            if media_content_id not in db.playlists:
+        if media_type == MEDIA_TYPE_PLAYLIST:
+            if media_id not in db.playlists:
                 raise HomeAssistantError(
-                    f"Playlist '{media_content_id}' not found on device"
+                    f"Playlist '{media_id}' not found on device"
                 )
-            await self._play_playlist(media_content_id)
+            await self._play_playlist(media_id)
             return
 
         raise HomeAssistantError(
-            f"Unsupported media type '{media_content_type}'"
+            f"Unsupported media type '{media_type}'"
         )
 
     async def _play_playlist(
