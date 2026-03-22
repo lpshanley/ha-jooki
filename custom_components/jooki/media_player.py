@@ -178,7 +178,10 @@ class JookiMediaPlayer(MediaPlayerEntity):
     @property
     def media_image_url(self) -> str | None:
         """Return the album art URL."""
-        return self._client.state.now_playing.image
+        image = self._client.state.now_playing.image
+        if isinstance(image, str):
+            return image
+        return None
 
     @property
     def media_duration(self) -> int | None:
