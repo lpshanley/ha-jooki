@@ -91,7 +91,6 @@ class JookiMediaPlayer(MediaPlayerEntity):
             name=entry.title,
             manufacturer="Jooki",
             model=self._cfg.model_name,
-            sw_version=self._cfg.version,
         )
         self._signal = SIGNAL_STATE_UPDATED.format(entry.entry_id)
         self._device_info_enriched = False
