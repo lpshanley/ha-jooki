@@ -54,6 +54,11 @@ class JookiMqttClient:
         self._client.reconnect_delay_set(min_delay=5, max_delay=120)
 
     @property
+    def host(self) -> str:
+        """Return the device host address."""
+        return self._host
+
+    @property
     def state(self) -> JookiState:
         """Return the current device state."""
         return self._state

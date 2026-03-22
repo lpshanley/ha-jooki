@@ -181,11 +181,17 @@ class JookiMediaPlayer(MediaPlayerEntity):
 
     @property
     def media_image_url(self) -> str | None:
-        """Return the album art URL."""
+        """Return the album art URL.
+
+        Spotify images are full URLs. Local track artwork uses relative
+        paths like ``/artwork/hash.jpg`` which need the device host prepended.
+        """
         image = self._client.state.now_playing.image
-        if isinstance(image, str):
-            return image
-        return None
+        if not isinstance(image, str):
+            return None
+        if image.startswith("/"):
+            return f"http://{self._client.host}{image}"
+        return image
 
     @property
     def media_duration(self) -> int | None:
