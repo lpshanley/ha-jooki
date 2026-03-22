@@ -34,6 +34,20 @@ def _disk_usage_percent(state: JookiState) -> int | None:
     return None
 
 
+def _playback_source(state: JookiState) -> str | None:
+    """Return the current playback service (SPOTIFY, FILE, STREAM, etc.)."""
+    return state.now_playing.service
+
+
+def _current_playlist(state: JookiState) -> str | None:
+    """Resolve the current playlist ID to its title."""
+    pid = state.now_playing.playlist_id
+    if not pid:
+        return None
+    playlist = state.db.playlists.get(pid)
+    return playlist.title if playlist else pid
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: JookiConfigEntry,
@@ -101,6 +115,69 @@ async def async_setup_entry(
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
             value_fn=_disk_usage_percent,
+        ),
+        JookiSensor(
+            client=client,
+            entry=entry,
+            key="playback_source",
+            name="Playback Source",
+            icon="mdi:music-box-outline",
+            value_fn=_playback_source,
+        ),
+        JookiSensor(
+            client=client,
+            entry=entry,
+            key="current_playlist",
+            name="Current Playlist",
+            icon="mdi:playlist-music",
+            value_fn=_current_playlist,
+        ),
+        JookiSensor(
+            client=client,
+            entry=entry,
+            key="nfc_tag_id",
+            name="NFC Tag ID",
+            icon="mdi:nfc-variant",
+            entity_category=EntityCategory.DIAGNOSTIC,
+            value_fn=lambda s: s.nfc.tag_id if s.nfc.present else None,
+        ),
+        JookiSensor(
+            client=client,
+            entry=entry,
+            key="spotify_username",
+            name="Spotify Username",
+            icon="mdi:spotify",
+            entity_category=EntityCategory.DIAGNOSTIC,
+            value_fn=lambda s: s.spotify.username,
+        ),
+        JookiSensor(
+            client=client,
+            entry=entry,
+            key="firmware",
+            name="Firmware",
+            icon="mdi:chip",
+            entity_category=EntityCategory.DIAGNOSTIC,
+            value_fn=lambda s: s.device.firmware,
+        ),
+        JookiSensor(
+            client=client,
+            entry=entry,
+            key="playlist_count",
+            name="Playlist Count",
+            icon="mdi:playlist-music",
+            state_class=SensorStateClass.MEASUREMENT,
+            entity_category=EntityCategory.DIAGNOSTIC,
+            value_fn=lambda s: len(s.db.playlists),
+        ),
+        JookiSensor(
+            client=client,
+            entry=entry,
+            key="track_count",
+            name="Track Count",
+            icon="mdi:music-note-plus",
+            state_class=SensorStateClass.MEASUREMENT,
+            entity_category=EntityCategory.DIAGNOSTIC,
+            value_fn=lambda s: len(s.db.tracks),
         ),
     ])
 

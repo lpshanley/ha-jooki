@@ -70,6 +70,14 @@ async def async_setup_entry(
             value_fn=lambda s: s.spotify.active,
             entity_category=EntityCategory.DIAGNOSTIC,
         ),
+        JookiBinarySensor(
+            client=client,
+            entry=entry,
+            key="audiobook",
+            name="Audiobook",
+            icon="mdi:book-music",
+            value_fn=lambda s: s.now_playing.audiobook,
+        ),
     ])
 
 

@@ -14,7 +14,7 @@ from homeassistant.components.light import (
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import JookiConfigEntry
@@ -61,6 +61,7 @@ class JookiLedLight(LightEntity):
     _attr_color_mode = ColorMode.RGB
     _attr_supported_features = LightEntityFeature.EFFECT
     _attr_effect_list = ALL_EFFECTS
+    _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(self, client: JookiMqttClient, entry: JookiConfigEntry) -> None:
         """Initialize the LED ring light."""
