@@ -74,6 +74,7 @@ class JookiMediaPlayer(MediaPlayerEntity):
         | MediaPlayerEntityFeature.TURN_OFF
         | MediaPlayerEntityFeature.REPEAT_SET
         | MediaPlayerEntityFeature.SHUFFLE_SET
+        | MediaPlayerEntityFeature.SEEK
         | MediaPlayerEntityFeature.BROWSE_MEDIA
         | MediaPlayerEntityFeature.PLAY_MEDIA
     )
@@ -367,45 +368,60 @@ class JookiMediaPlayer(MediaPlayerEntity):
         media_content_id: str,
         **kwargs: Any,
     ) -> None:
-        """Play media by simulating figurine placement or playlist selection."""
+        """Play a playlist or figurine via the PLAYLIST_PLAY command."""
         db = self._client.state.db
 
         if media_content_type == MEDIA_TYPE_FIGURINE:
+            # Resolve figurine → playlist by matching tag_id
+            playlist_id = self._find_playlist_for_token(media_content_id)
+            if playlist_id:
+                await self._play_playlist(playlist_id)
+                return
+            # Fallback: simulate NFC placement if no playlist found
             token = db.tokens.get(media_content_id)
             if not token:
                 raise HomeAssistantError(
-                    f"Figurine with tag ID '{media_content_id}' not found on device"
-                )
-            if not token.star_id:
-                raise HomeAssistantError(
-                    f"Figurine '{token.name}' has no star ID assigned"
+                    f"Figurine with tag ID '{media_content_id}' not found"
                 )
             await self._client.async_publish(
                 self._cfg.topic_nfc_tag,
-                f"{media_content_id},{token.star_id}",
+                f"{media_content_id},{token.star_id or '0'}",
             )
             return
 
         if media_content_type == MEDIA_TYPE_PLAYLIST:
-            playlist = db.playlists.get(media_content_id)
-            if not playlist:
+            if media_content_id not in db.playlists:
                 raise HomeAssistantError(
                     f"Playlist '{media_content_id}' not found on device"
                 )
-            if not playlist.tag_id:
-                raise HomeAssistantError(
-                    f"Playlist '{playlist.title}' has no figurine bound to it"
-                )
-            token = db.tokens.get(playlist.tag_id)
-            star_id = token.star_id if token else "0"
-            await self._client.async_publish(
-                self._cfg.topic_nfc_tag,
-                f"{playlist.tag_id},{star_id}",
-            )
+            await self._play_playlist(media_content_id)
             return
 
         raise HomeAssistantError(
             f"Unsupported media type '{media_content_type}'"
+        )
+
+    async def _play_playlist(
+        self, playlist_id: str, track_index: int = 0
+    ) -> None:
+        """Send PLAYLIST_PLAY command to start playback."""
+        await self._client.async_publish(
+            self._cfg.topic_playlist_play,
+            json.dumps({"playlistId": playlist_id, "trackIndex": track_index}),
+        )
+
+    def _find_playlist_for_token(self, tag_id: str) -> str | None:
+        """Find the playlist bound to a given NFC tag_id."""
+        for pid, playlist in self._client.state.db.playlists.items():
+            if playlist.tag_id == tag_id:
+                return pid
+        return None
+
+    async def async_media_seek(self, position: float) -> None:
+        """Seek to a position in the current track (seconds)."""
+        await self._client.async_publish(
+            self._cfg.topic_seek,
+            json.dumps({"position_ms": str(position * 1000)}),
         )
 
     async def async_media_play(self) -> None:

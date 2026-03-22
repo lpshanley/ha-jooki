@@ -1,0 +1,23 @@
+skip_seconds:
+  name: Skip Seconds
+  description: Skip forward or backward by a number of seconds (useful for audiobooks).
+  fields:
+    device_id:
+      name: Device
+      description: The Jooki device to control.
+      required: true
+      selector:
+        device:
+          integration: jooki
+    delta_s:
+      name: Seconds
+      description: Number of seconds to skip (positive = forward, negative = backward).
+      required: true
+      example: 30
+      selector:
+        number:
+          min: -300
+          max: 300
+          step: 1
+          unit_of_measurement: seconds
+          mode: box

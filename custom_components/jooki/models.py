@@ -108,6 +108,7 @@ class JookiDeviceInfo:
     disk_usage: dict | None = None
     flags: list[str] | None = None
     toy_safe: bool = False
+    locale: str | None = None
 
 
 @dataclass

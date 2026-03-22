@@ -11,7 +11,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import JookiConfigEntry
-from .const import DOMAIN, SIGNAL_BUTTON_EVENT, SIGNAL_NFC_EVENT
+from .const import DOMAIN, SIGNAL_BUTTON_EVENT, SIGNAL_NFC_EVENT, SIGNAL_VOLUME_EVENT
 from .mqtt_client import JookiMqttClient
 
 
@@ -27,6 +27,7 @@ async def async_setup_entry(
         JookiButtonEvent(client, entry, "next", "Next Button"),
         JookiButtonEvent(client, entry, "previous", "Previous Button"),
         JookiButtonEvent(client, entry, "circle", "Circle Button"),
+        JookiVolumeKnobEvent(client, entry),
     ])
 
 
@@ -107,6 +108,43 @@ class JookiButtonEvent(EventEntity):
         if button_name == self._button_key:
             self._trigger_event(event_type, {"button": button_name})
             self.async_write_ha_state()
+
+    @property
+    def available(self) -> bool:
+        """Return True if the device is available."""
+        return self._client.state.available
+
+
+class JookiVolumeKnobEvent(EventEntity):
+    """Event entity for the physical volume knob."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Volume Knob"
+    _attr_icon = "mdi:knob"
+    _attr_event_types = ["volume_changed"]
+
+    def __init__(self, client: JookiMqttClient, entry: JookiConfigEntry) -> None:
+        """Initialize the volume knob event entity."""
+        self._client = client
+        self._attr_unique_id = f"{entry.entry_id}_volume_knob"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+        )
+        self._signal = SIGNAL_VOLUME_EVENT.format(entry.entry_id)
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to volume knob event signals."""
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass, self._signal, self._handle_volume_event
+            )
+        )
+
+    @callback
+    def _handle_volume_event(self, vol: str) -> None:
+        """Handle a volume knob event from the MQTT client."""
+        self._trigger_event("volume_changed", {"volume": vol})
+        self.async_write_ha_state()
 
     @property
     def available(self) -> bool:

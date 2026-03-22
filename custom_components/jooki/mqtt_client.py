@@ -16,6 +16,7 @@ from .const import (
     SIGNAL_BUTTON_EVENT,
     SIGNAL_NFC_EVENT,
     SIGNAL_STATE_UPDATED,
+    SIGNAL_VOLUME_EVENT,
     JookiDeviceConfig,
 )
 from .models import JookiState
@@ -44,6 +45,7 @@ class JookiMqttClient:
         self._signal = SIGNAL_STATE_UPDATED.format(entry_id)
         self._signal_nfc = SIGNAL_NFC_EVENT.format(entry_id)
         self._signal_button = SIGNAL_BUTTON_EVENT.format(entry_id)
+        self._signal_volume = SIGNAL_VOLUME_EVENT.format(entry_id)
 
         self._client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
         self._client.on_connect = self._on_connect
@@ -126,6 +128,15 @@ class JookiMqttClient:
         client.subscribe(cfg.topic_gpio_next)
         client.subscribe(cfg.topic_gpio_prev)
         client.subscribe(cfg.topic_gpio_circle)
+        client.subscribe(cfg.topic_gpio_vol_set)
+
+        # Audio playback events
+        client.subscribe(cfg.topic_audio_position)
+        client.subscribe(cfg.topic_audio_playing)
+        client.subscribe(cfg.topic_audio_paused)
+        client.subscribe(cfg.topic_audio_stopped)
+        client.subscribe(cfg.topic_audio_error)
+        client.subscribe(cfg.topic_audio_ended)
 
         # Reset state for accumulation
         self._state = JookiState(available=True)
@@ -180,6 +191,17 @@ class JookiMqttClient:
             self._handle_nfc_tag_removed()
         elif topic in (cfg.topic_gpio_next, cfg.topic_gpio_prev, cfg.topic_gpio_circle):
             self._handle_gpio_button(topic, msg)
+        elif topic == cfg.topic_gpio_vol_set:
+            self._handle_gpio_vol_set(msg)
+        elif topic in (
+            cfg.topic_audio_position,
+            cfg.topic_audio_playing,
+            cfg.topic_audio_paused,
+            cfg.topic_audio_stopped,
+            cfg.topic_audio_error,
+            cfg.topic_audio_ended,
+        ):
+            self._handle_audio_event(topic, msg)
         elif topic == cfg.topic_error:
             self._handle_error(msg)
 
@@ -250,12 +272,72 @@ class JookiMqttClient:
             event_type,
         )
 
+    def _handle_gpio_vol_set(self, msg: mqtt.MQTTMessage) -> None:
+        """Handle a physical volume knob change event."""
+        try:
+            payload = json.loads(msg.payload)
+            vol = payload.get("vol", "0")
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            _LOGGER.warning("Invalid vol_set payload: %s", msg.payload[:200])
+            return
+
+        self._hass.loop.call_soon_threadsafe(
+            async_dispatcher_send,
+            self._hass,
+            self._signal_volume,
+            str(vol),
+        )
+
+    def _handle_audio_event(self, topic: str, msg: mqtt.MQTTMessage) -> None:
+        """Handle audio subsystem events for improved state tracking."""
+        cfg = self._device_config
+
+        if topic == cfg.topic_audio_position:
+            try:
+                payload = json.loads(msg.payload)
+                pos = payload.get("pos")
+                if pos is not None:
+                    self._state.playback_info.position_ms = int(pos)
+                    self._state._rebuild_facade()
+                    self._dispatch_state()
+            except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
+                _LOGGER.warning(
+                    "Invalid audio position payload: %s", msg.payload[:200]
+                )
+            return
+
+        if topic == cfg.topic_audio_playing:
+            self._state.playback_info.state = "playing"
+        elif topic == cfg.topic_audio_paused:
+            self._state.playback_info.state = "paused"
+        elif topic == cfg.topic_audio_stopped:
+            self._state.playback_info.state = "idle"
+        elif topic == cfg.topic_audio_ended:
+            self._state.playback_info.state = "idle"
+            self._state.playback_info.position_ms = None
+        elif topic == cfg.topic_audio_error:
+            try:
+                payload = json.loads(msg.payload)
+                _LOGGER.warning("Jooki audio error: %s", payload)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                _LOGGER.warning("Jooki audio error (unparseable payload)")
+            return
+
+        self._state._rebuild_facade()
+        self._dispatch_state()
+
     def _handle_error(self, msg: mqtt.MQTTMessage) -> None:
         """Handle an error/info message from the device."""
         try:
             payload = json.loads(msg.payload)
             error_msg = payload.get("msg", "Unknown error")
             _LOGGER.info("Jooki device message: %s", error_msg)
+
+            # Extract locale from "Locale switched" confirmation
+            info = payload.get("info")
+            if isinstance(info, dict) and "locale" in info:
+                self._state.device.locale = info["locale"]
+                self._dispatch_state()
         except (json.JSONDecodeError, UnicodeDecodeError):
             _LOGGER.warning("Invalid error payload from Jooki: %s", msg.payload[:200])
 
