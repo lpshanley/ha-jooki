@@ -96,6 +96,7 @@ class JookiMediaPlayer(MediaPlayerEntity):
         self._signal = SIGNAL_STATE_UPDATED.format(entry.entry_id)
         self._device_info_enriched = False
         self._position_updated_at: datetime | None = None
+        self._last_position_ms: int | None = None
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to state updates."""
@@ -107,8 +108,11 @@ class JookiMediaPlayer(MediaPlayerEntity):
     def _handle_update(self) -> None:
         """Handle a state update from the MQTT client."""
         self._enrich_device_info()
-        # Update position timestamp only when the device reports a position
-        if self._client.state.playback.position_ms is not None:
+        # Only update the timestamp when the position value actually changes,
+        # to avoid resetting HA's interpolation on redundant updates.
+        pos = self._client.state.playback.position_ms
+        if pos is not None and pos != self._last_position_ms:
+            self._last_position_ms = pos
             self._position_updated_at = utcnow()
         self.async_write_ha_state()
 
@@ -192,11 +196,11 @@ class JookiMediaPlayer(MediaPlayerEntity):
         return None
 
     @property
-    def media_position(self) -> int | None:
+    def media_position(self) -> float | None:
         """Return the current playback position in seconds."""
         pos = self._client.state.playback.position_ms
         if pos is not None:
-            return pos // 1000
+            return pos / 1000
         return None
 
     @property
