@@ -31,6 +31,7 @@ from .const import (
     MEDIA_TYPE_TRACK,
     SIGNAL_STATE_UPDATED,
 )
+from .models import JookiPlaylist
 from .mqtt_client import JookiMqttClient
 
 _PLAYBACK_STATE_MAP = {
@@ -228,62 +229,31 @@ class JookiMediaPlayer(MediaPlayerEntity):
         media_content_type: str | None = None,
         media_content_id: str | None = None,
     ) -> BrowseMedia:
-        """Implement the media browser."""
-        if media_content_type is None or media_content_id is None:
-            return self._build_root_browse()
+        """Implement the media browser.
 
-        if media_content_id == "playlists":
-            return self._build_playlists_browse()
-
-        if media_content_id == "figurines":
-            return self._build_figurines_browse()
-
-        if media_content_type == MEDIA_TYPE_PLAYLIST:
+        Flat layout: all playlists at the root level (no sub-folders).
+        The TRASH system playlist is renamed to "Unassigned" in the UI.
+        """
+        if media_content_type == MEDIA_TYPE_PLAYLIST and media_content_id:
             return self._build_playlist_detail(media_content_id)
 
         return self._build_root_browse()
 
-    def _build_root_browse(self) -> BrowseMedia:
-        """Build the root media browser with Playlists and Figurines folders."""
-        children = [
-            BrowseMedia(
-                title="Playlists",
-                media_class=MediaType.PLAYLIST,
-                media_content_type=MEDIA_TYPE_PLAYLIST,
-                media_content_id="playlists",
-                can_play=False,
-                can_expand=True,
-                thumbnail=None,
-            ),
-            BrowseMedia(
-                title="Figurines",
-                media_class=MediaType.PLAYLIST,
-                media_content_type=MEDIA_TYPE_FIGURINE,
-                media_content_id="figurines",
-                can_play=False,
-                can_expand=True,
-                thumbnail=None,
-            ),
-        ]
-        return BrowseMedia(
-            title="Jooki",
-            media_class=MediaType.APP,
-            media_content_type="root",
-            media_content_id="root",
-            can_play=False,
-            can_expand=True,
-            children=children,
-        )
+    def _playlist_display_title(self, pid: str, playlist: JookiPlaylist) -> str:
+        """Return a display title, renaming the TRASH system playlist."""
+        if pid == "TRASH":
+            return "Unassigned"
+        return playlist.title or pid
 
-    def _build_playlists_browse(self) -> BrowseMedia:
-        """Build the playlists folder listing."""
+    def _build_root_browse(self) -> BrowseMedia:
+        """Build a flat root listing of all playlists."""
         db = self._client.state.db
         children = []
         for pid, playlist in db.playlists.items():
             has_tracks = bool(playlist.tracks) or playlist.spotify_uri
             children.append(
                 BrowseMedia(
-                    title=playlist.title or pid,
+                    title=self._playlist_display_title(pid, playlist),
                     media_class=MediaType.PLAYLIST,
                     media_content_type=MEDIA_TYPE_PLAYLIST,
                     media_content_id=pid,
@@ -293,36 +263,10 @@ class JookiMediaPlayer(MediaPlayerEntity):
                 )
             )
         return BrowseMedia(
-            title="Playlists",
-            media_class=MediaType.PLAYLIST,
-            media_content_type=MEDIA_TYPE_PLAYLIST,
-            media_content_id="playlists",
-            can_play=False,
-            can_expand=True,
-            children=children,
-        )
-
-    def _build_figurines_browse(self) -> BrowseMedia:
-        """Build the figurines folder listing."""
-        db = self._client.state.db
-        children = []
-        for tid, token in db.tokens.items():
-            children.append(
-                BrowseMedia(
-                    title=f"{token.name} ({token.star_id})" if token.star_id else token.name,
-                    media_class=MediaType.PLAYLIST,
-                    media_content_type=MEDIA_TYPE_FIGURINE,
-                    media_content_id=tid,
-                    can_play=True,
-                    can_expand=False,
-                    thumbnail=None,
-                )
-            )
-        return BrowseMedia(
-            title="Figurines",
-            media_class=MediaType.PLAYLIST,
-            media_content_type=MEDIA_TYPE_FIGURINE,
-            media_content_id="figurines",
+            title="Jooki",
+            media_class=MediaType.APP,
+            media_content_type="root",
+            media_content_id="root",
             can_play=False,
             can_expand=True,
             children=children,
@@ -343,13 +287,18 @@ class JookiMediaPlayer(MediaPlayerEntity):
                         media_class=MediaType.TRACK,
                         media_content_type=MEDIA_TYPE_TRACK,
                         media_content_id=track_id,
-                        can_play=False,
+                        can_play=True,
                         can_expand=False,
                         thumbnail=None,
                     )
                 )
+        detail_title = (
+            self._playlist_display_title(playlist_id, playlist)
+            if playlist
+            else playlist_id
+        )
         return BrowseMedia(
-            title=playlist.title if playlist else playlist_id,
+            title=detail_title,
             media_class=MediaType.PLAYLIST,
             media_content_type=MEDIA_TYPE_PLAYLIST,
             media_content_id=playlist_id,
@@ -368,7 +317,11 @@ class JookiMediaPlayer(MediaPlayerEntity):
         media_id: str,
         **kwargs: Any,
     ) -> None:
-        """Play a playlist or figurine via the PLAYLIST_PLAY command."""
+        """Play a playlist or figurine.
+
+        Local playlists use PLAYLIST_PLAY (trackIndex is 1-based).
+        Spotify-linked playlists use NFC simulation (triggers play_preset).
+        """
         db = self._client.state.db
 
         if media_type == MEDIA_TYPE_FIGURINE:
@@ -383,10 +336,7 @@ class JookiMediaPlayer(MediaPlayerEntity):
                 raise HomeAssistantError(
                     f"Figurine with tag ID '{media_id}' not found"
                 )
-            await self._client.async_publish(
-                self._cfg.topic_nfc_tag,
-                f"{media_id},{token.star_id or '0'}",
-            )
+            await self._simulate_nfc(media_id, token.star_id)
             return
 
         if media_type == MEDIA_TYPE_PLAYLIST:
@@ -397,17 +347,48 @@ class JookiMediaPlayer(MediaPlayerEntity):
             await self._play_playlist(media_id)
             return
 
+        if media_type == MEDIA_TYPE_TRACK:
+            await self._play_track(media_id)
+            return
+
         raise HomeAssistantError(
             f"Unsupported media type '{media_type}'"
         )
 
     async def _play_playlist(
-        self, playlist_id: str, track_index: int = 0
+        self, playlist_id: str, track_index: int | None = None
     ) -> None:
-        """Send PLAYLIST_PLAY command to start playback."""
+        """Play a playlist via PLAYLIST_PLAY.
+
+        Local playlists use 1-based trackIndex.
+        Spotify playlists use 0-based trackIndex.
+        """
+        if track_index is None:
+            db = self._client.state.db
+            playlist = db.playlists.get(playlist_id)
+            track_index = 0 if (playlist and playlist.spotify_uri) else 1
+
         await self._client.async_publish(
             self._cfg.topic_playlist_play,
             json.dumps({"playlistId": playlist_id, "trackIndex": track_index}),
+        )
+
+    async def _play_track(self, track_id: str) -> None:
+        """Find which playlist contains a track and play from that index."""
+        db = self._client.state.db
+        for pid, playlist in db.playlists.items():
+            if track_id in playlist.tracks:
+                # Local playlists are 1-based
+                index = playlist.tracks.index(track_id) + 1
+                await self._play_playlist(pid, track_index=index)
+                return
+        raise HomeAssistantError(f"Track '{track_id}' not found in any playlist")
+
+    async def _simulate_nfc(self, tag_id: str, star_id: str | None) -> None:
+        """Simulate NFC figurine placement."""
+        await self._client.async_publish(
+            self._cfg.topic_nfc_tag,
+            f"{tag_id},{star_id or '0'}",
         )
 
     def _find_playlist_for_token(self, tag_id: str) -> str | None:
