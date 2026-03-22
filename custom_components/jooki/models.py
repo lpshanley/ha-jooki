@@ -296,7 +296,7 @@ class JookiState:
                 track=np_data.get("track", self.now_playing.track),
                 artist=np_data.get("artist", self.now_playing.artist),
                 album=np_data.get("album", self.now_playing.album),
-                image=np_data.get("image", self.now_playing.image),
+                image=np_data.get("image", self.now_playing.image) or None,
                 duration_ms=np_data.get("duration_ms", self.now_playing.duration_ms),
                 has_next=np_data.get("hasNext", self.now_playing.has_next),
                 has_prev=np_data.get("hasPrev", self.now_playing.has_prev),
