@@ -83,6 +83,17 @@ def playlist_id_for_figurine(
     return None
 
 
+def retained_locale(selected: str | None, device_locale: str | None) -> str | None:
+    """Keep the user's locale when a device slice does not report one.
+
+    SWITCH_LOCALE is not echoed on success, and device slices omit locale.
+    A missing value must not replace the choice with a default language.
+    """
+    if isinstance(device_locale, str) and device_locale:
+        return device_locale
+    return selected
+
+
 # ---------------------------------------------------------------------------
 # V2 fine-grained state dataclasses
 # ---------------------------------------------------------------------------

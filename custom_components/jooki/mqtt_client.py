@@ -344,12 +344,6 @@ class JookiMqttClient:
             payload = json.loads(msg.payload)
             error_msg = payload.get("msg", "Unknown error")
             _LOGGER.info("Jooki device message: %s", error_msg)
-
-            # Extract locale from "Locale switched" confirmation
-            info = payload.get("info")
-            if isinstance(info, dict) and "locale" in info:
-                self._state.device.locale = info["locale"]
-                self._dispatch_state()
         except (json.JSONDecodeError, UnicodeDecodeError):
             _LOGGER.warning("Invalid error payload from Jooki: %s", msg.payload[:200])
 

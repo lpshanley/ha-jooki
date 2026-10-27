@@ -12,6 +12,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import JookiConfigEntry
 from .const import DOMAIN, SIGNAL_STATE_UPDATED
+from .models import retained_locale
 from .mqtt_client import JookiMqttClient
 
 LOCALE_OPTIONS: dict[str, str] = {
@@ -60,12 +61,12 @@ class JookiLocaleSelect(SelectEntity):
 
     @callback
     def _handle_update(self) -> None:
-        """Handle a state update — refresh current option from device state."""
-        locale = self._client.state.device.locale
-        if locale:
-            label = LOCALE_CODE_TO_LABEL.get(locale)
-            if label:
-                self._attr_current_option = label
+        """Refresh availability without clearing a language the user picked."""
+        selected = LOCALE_OPTIONS.get(self._attr_current_option or "")
+        code = retained_locale(selected, self._client.state.device.locale)
+        label = LOCALE_CODE_TO_LABEL.get(code) if code else None
+        if label:
+            self._attr_current_option = label
         self.async_write_ha_state()
 
     @property
