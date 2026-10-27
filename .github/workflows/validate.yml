@@ -8,10 +8,10 @@ on:
 jobs:
   hacs:
     name: HACS validation
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: HACS validation
         uses: hacs/action@main
@@ -20,10 +20,10 @@ jobs:
 
   hassfest:
     name: Hassfest validation
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Hassfest validation
         uses: home-assistant/actions/hassfest@master

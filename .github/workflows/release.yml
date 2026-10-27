@@ -7,13 +7,13 @@ on:
 jobs:
   release:
     name: Build and upload release asset
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Set version in manifest
         run: |
