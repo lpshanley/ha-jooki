@@ -69,6 +69,7 @@ async def async_setup_entry(
 class JookiMediaPlayer(MediaPlayerEntity):
     """Representation of a Jooki media player."""
 
+    _attr_should_poll = False
     _attr_has_entity_name = True
     _attr_name = None
     _attr_supported_features = (

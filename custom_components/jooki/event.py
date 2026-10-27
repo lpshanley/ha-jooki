@@ -11,7 +11,13 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import JookiConfigEntry
-from .const import DOMAIN, SIGNAL_BUTTON_EVENT, SIGNAL_NFC_EVENT, SIGNAL_VOLUME_EVENT
+from .const import (
+    DOMAIN,
+    SIGNAL_BUTTON_EVENT,
+    SIGNAL_NFC_EVENT,
+    SIGNAL_STATE_UPDATED,
+    SIGNAL_VOLUME_EVENT,
+)
 from .device_commands import JookiDevice
 
 
@@ -31,9 +37,36 @@ async def async_setup_entry(
     ])
 
 
-class JookiNfcEvent(EventEntity):
+class _AvailabilityPush:
+    """Write HA state only when device availability changes."""
+
+    _client: JookiDevice
+
+    def _subscribe_availability(self, entry_id: str) -> None:
+        """Record the availability seen as the entity is added."""
+        self._seen_available = self._client.state.available
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                SIGNAL_STATE_UPDATED.format(entry_id),
+                self._handle_availability,
+            )
+        )
+
+    @callback
+    def _handle_availability(self) -> None:
+        """Write HA state when the device comes online or goes offline."""
+        available = self._client.state.available
+        if available == self._seen_available:
+            return
+        self._seen_available = available
+        self.async_write_ha_state()
+
+
+class JookiNfcEvent(_AvailabilityPush, EventEntity):
     """Event entity for NFC figurine placement/removal."""
 
+    _attr_should_poll = False
     _attr_has_entity_name = True
     _attr_name = "Figurine"
     _attr_icon = "mdi:teddy-bear"
@@ -47,9 +80,11 @@ class JookiNfcEvent(EventEntity):
             identifiers={(DOMAIN, entry.entry_id)},
         )
         self._signal = SIGNAL_NFC_EVENT.format(entry.entry_id)
+        self._entry_id = entry.entry_id
 
     async def async_added_to_hass(self) -> None:
-        """Subscribe to NFC event signals."""
+        """Subscribe to NFC events and availability changes."""
+        self._subscribe_availability(self._entry_id)
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass, self._signal, self._handle_nfc_event
@@ -70,9 +105,10 @@ class JookiNfcEvent(EventEntity):
         return self._client.state.available
 
 
-class JookiButtonEvent(EventEntity):
+class JookiButtonEvent(_AvailabilityPush, EventEntity):
     """Event entity for a physical button press/release."""
 
+    _attr_should_poll = False
     _attr_has_entity_name = True
     _attr_event_types = ["pressed", "released"]
 
@@ -93,9 +129,11 @@ class JookiButtonEvent(EventEntity):
             identifiers={(DOMAIN, entry.entry_id)},
         )
         self._signal = SIGNAL_BUTTON_EVENT.format(entry.entry_id)
+        self._entry_id = entry.entry_id
 
     async def async_added_to_hass(self) -> None:
-        """Subscribe to button event signals."""
+        """Subscribe to button events and availability changes."""
+        self._subscribe_availability(self._entry_id)
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass, self._signal, self._handle_button_event
@@ -115,9 +153,10 @@ class JookiButtonEvent(EventEntity):
         return self._client.state.available
 
 
-class JookiVolumeKnobEvent(EventEntity):
+class JookiVolumeKnobEvent(_AvailabilityPush, EventEntity):
     """Event entity for the physical volume knob."""
 
+    _attr_should_poll = False
     _attr_has_entity_name = True
     _attr_name = "Volume Knob"
     _attr_icon = "mdi:knob"
@@ -131,9 +170,11 @@ class JookiVolumeKnobEvent(EventEntity):
             identifiers={(DOMAIN, entry.entry_id)},
         )
         self._signal = SIGNAL_VOLUME_EVENT.format(entry.entry_id)
+        self._entry_id = entry.entry_id
 
     async def async_added_to_hass(self) -> None:
-        """Subscribe to volume knob event signals."""
+        """Subscribe to volume knob events and availability changes."""
+        self._subscribe_availability(self._entry_id)
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass, self._signal, self._handle_volume_event

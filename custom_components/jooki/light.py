@@ -55,6 +55,7 @@ async def async_setup_entry(
 class JookiLedLight(LightEntity):
     """Representation of the Jooki LED ring."""
 
+    _attr_should_poll = False
     _attr_has_entity_name = True
     _attr_name = "LED Ring"
     _attr_supported_color_modes = {ColorMode.RGB}

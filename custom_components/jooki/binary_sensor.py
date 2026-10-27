@@ -84,6 +84,7 @@ async def async_setup_entry(
 class JookiBinarySensor(BinarySensorEntity):
     """Generic binary sensor for a Jooki device."""
 
+    _attr_should_poll = False
     _attr_has_entity_name = True
 
     def __init__(

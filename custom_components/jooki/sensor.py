@@ -185,6 +185,7 @@ async def async_setup_entry(
 class JookiSensor(SensorEntity):
     """Generic sensor for a Jooki device."""
 
+    _attr_should_poll = False
     _attr_has_entity_name = True
 
     def __init__(

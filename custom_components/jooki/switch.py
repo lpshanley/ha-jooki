@@ -27,6 +27,7 @@ async def async_setup_entry(
 class JookiToySafeSwitch(SwitchEntity):
     """Switch to toggle Toy Safe content filtering mode."""
 
+    _attr_should_poll = False
     _attr_has_entity_name = True
     _attr_name = "Toy Safe"
     _attr_icon = "mdi:ear-hearing"

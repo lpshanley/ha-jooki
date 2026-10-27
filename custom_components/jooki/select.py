@@ -34,6 +34,7 @@ async def async_setup_entry(
 class JookiLocaleSelect(SelectEntity):
     """Select entity to change the Jooki device language."""
 
+    _attr_should_poll = False
     _attr_has_entity_name = True
     _attr_name = "Language"
     _attr_icon = "mdi:translate"
