@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.0](https://github.com/lpshanley/ha-jooki/compare/0.3.0...0.4.0) (2026-10-27)
+
+
+### Features
+
+* **discovery:** confirm a DHCP player with ping and MQTT ([efd613a](https://github.com/lpshanley/ha-jooki/commit/efd613a9f9ceb297ef00225878e2435d109fe09e))
+* **discovery:** latch the player hostname as the unique id ([8f05492](https://github.com/lpshanley/ha-jooki/commit/8f054920cade38eb9530035a450e16d2e9f18372))
+* **identity:** recognize a Jooki hostname ([a435b2b](https://github.com/lpshanley/ha-jooki/commit/a435b2bac7ba819995ab625a797f2a7bd9701598))
+
 ## [0.3.0](https://github.com/lpshanley/ha-jooki/compare/0.2.0...0.3.0) (2026-10-27)
 
 
