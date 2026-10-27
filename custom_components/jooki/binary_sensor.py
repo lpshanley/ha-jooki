@@ -55,6 +55,14 @@ async def async_setup_entry(
         JookiBinarySensor(
             client=client,
             entry=entry,
+            key="bluetooth_speaker",
+            name="Bluetooth Speaker",
+            icon="mdi:bluetooth-audio",
+            value_fn=lambda s: s.bluetooth.connected_mac is not None,
+        ),
+        JookiBinarySensor(
+            client=client,
+            entry=entry,
             key="figurine_present",
             name="Figurine Present",
             device_class=BinarySensorDeviceClass.PRESENCE,

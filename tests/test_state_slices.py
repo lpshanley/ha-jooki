@@ -152,6 +152,38 @@ def test_empty_nfc_list_clears_figurine(models):
     assert "p" in state.db.playlists
 
 
+def test_bluetooth_survives_wifi_and_replaces_on_its_own_key(models):
+    """``bluetooth.connected_mac`` is its own slice. A non-dict clears it."""
+    state = models.JookiState()
+    state.apply_slices(
+        {
+            "bluetooth": {
+                "connected_mac": "D4:5E:EC:75:2A:F4",
+                "devices": {"20:74:CF:3C:B3:97": {"name": "Air"}},
+            },
+            "wifi": {"ssid": "old"},
+        }
+    )
+
+    assert state.bluetooth.connected_mac == "D4:5E:EC:75:2A:F4"
+    assert not hasattr(state.bluetooth, "devices")
+
+    state.apply_slices({"wifi": {"ssid": "net"}})
+
+    assert state.bluetooth.connected_mac == "D4:5E:EC:75:2A:F4"
+    assert state.wifi.ssid == "net"
+
+    state.apply_slices({"bluetooth": {"connected_mac": "AA:BB:CC:DD:EE:FF"}})
+
+    assert state.bluetooth.connected_mac == "AA:BB:CC:DD:EE:FF"
+    assert state.wifi.ssid == "net"
+
+    state.apply_slices({"bluetooth": []})
+
+    assert state.bluetooth.connected_mac is None
+    assert state.wifi.ssid == "net"
+
+
 def test_user_messages_survive_wifi_and_replace_on_their_own_key(models):
     """``userMessages`` is its own slice and unknown items are ignored."""
     state = models.JookiState()

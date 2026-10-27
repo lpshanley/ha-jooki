@@ -131,6 +131,15 @@ async def async_setup_entry(
         JookiSensor(
             client=client,
             entry=entry,
+            key="bluetooth_speaker_mac",
+            name="Bluetooth Speaker MAC",
+            icon="mdi:bluetooth",
+            entity_category=EntityCategory.DIAGNOSTIC,
+            value_fn=lambda s: s.bluetooth.connected_mac,
+        ),
+        JookiSensor(
+            client=client,
+            entry=entry,
             key="battery_voltage",
             name="Battery Voltage",
             device_class=SensorDeviceClass.VOLTAGE,

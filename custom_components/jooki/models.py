@@ -174,6 +174,16 @@ class JookiPlaybackInfo:
 
 
 @dataclass
+class JookiBluetoothState:
+    """Bluetooth speaker connection (v2: bluetooth).
+
+    This batch uses ``connected_mac`` only. Scan results stay on the device.
+    """
+
+    connected_mac: str | None = None
+
+
+@dataclass
 class JookiWifiState:
     """WiFi connection state (v2: wifi)."""
 
@@ -355,6 +365,7 @@ class JookiState:
     now_playing: JookiNowPlaying = field(default_factory=JookiNowPlaying)
     playback_info: JookiPlaybackInfo = field(default_factory=JookiPlaybackInfo)
     wifi: JookiWifiState = field(default_factory=JookiWifiState)
+    bluetooth: JookiBluetoothState = field(default_factory=JookiBluetoothState)
     nfc: JookiNfcState = field(default_factory=JookiNfcState)
     spotify: JookiSpotifyState = field(default_factory=JookiSpotifyState)
     user_messages: list[JookiUserMessage] = field(default_factory=list)
@@ -373,9 +384,9 @@ class JookiState:
 
         Sets ``available``. Only top-level keys in *payload* are rebuilt.
         ``audio`` rebuilds audio and the playback facade. ``power``,
-        ``wifi``, ``nfc``, ``spotify``, ``userMessages``, ``device``, and
-        ``db`` each rebuild only themselves, so a wifi update does not
-        rebuild the catalog.
+        ``wifi``, ``bluetooth``, ``nfc``, ``spotify``, ``userMessages``,
+        ``device``, and ``db`` each rebuild only themselves, so a wifi
+        update does not rebuild the catalog.
         """
         _replace_slices(self.raw, payload)
         self.available = True
@@ -386,6 +397,8 @@ class JookiState:
             self._rebuild_facade()
         if "wifi" in payload:
             self._rebuild_wifi()
+        if "bluetooth" in payload:
+            self._rebuild_bluetooth()
         if "nfc" in payload:
             self._rebuild_nfc()
         if "spotify" in payload:
@@ -584,6 +597,22 @@ class JookiState:
             )
         else:
             self.playback_info = JookiPlaybackInfo()
+
+    # -- Bluetooth speaker ----------------------------------------------
+
+    def _rebuild_bluetooth(self) -> None:
+        """Replace the connected speaker address when ``bluetooth`` arrives.
+
+        A non-dict clears it. ``devices`` is ignored.
+        """
+        data = self.raw.get("bluetooth")
+        if not isinstance(data, dict):
+            self.bluetooth = JookiBluetoothState()
+            return
+        mac = data.get("connected_mac")
+        if not isinstance(mac, str) or not mac:
+            mac = None
+        self.bluetooth = JookiBluetoothState(connected_mac=mac)
 
     # -- WiFi -----------------------------------------------------------
 
