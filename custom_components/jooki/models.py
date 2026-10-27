@@ -203,6 +203,37 @@ class JookiSpotifyState:
 
 
 @dataclass
+class JookiUserMessage:
+    """One message the player wants a parent to see (v2: userMessages)."""
+
+    id: int | None = None
+    level: str | None = None
+    message_type: str | None = None
+    extra: dict | None = None
+
+
+_MESSAGE_KEYS = ("id", "level", "messageType", "extra")
+
+
+def _user_message(item: object) -> JookiUserMessage | None:
+    """Return a typed message, or None for an unknown item shape."""
+    if not isinstance(item, dict):
+        return None
+    if not any(key in item for key in _MESSAGE_KEYS):
+        return None
+    raw_id = item.get("id")
+    raw_level = item.get("level")
+    raw_type = item.get("messageType")
+    raw_extra = item.get("extra")
+    return JookiUserMessage(
+        id=raw_id if isinstance(raw_id, int) and not isinstance(raw_id, bool) else None,
+        level=raw_level if isinstance(raw_level, str) else None,
+        message_type=raw_type if isinstance(raw_type, str) else None,
+        extra=raw_extra if isinstance(raw_extra, dict) else None,
+    )
+
+
+@dataclass
 class JookiDeviceInfo:
     """Device hardware/firmware info (v2: device)."""
 
@@ -326,6 +357,7 @@ class JookiState:
     wifi: JookiWifiState = field(default_factory=JookiWifiState)
     nfc: JookiNfcState = field(default_factory=JookiNfcState)
     spotify: JookiSpotifyState = field(default_factory=JookiSpotifyState)
+    user_messages: list[JookiUserMessage] = field(default_factory=list)
     device: JookiDeviceInfo = field(default_factory=JookiDeviceInfo)
     db: JookiDatabaseState = field(default_factory=JookiDatabaseState)
 
@@ -341,8 +373,9 @@ class JookiState:
 
         Sets ``available``. Only top-level keys in *payload* are rebuilt.
         ``audio`` rebuilds audio and the playback facade. ``power``,
-        ``wifi``, ``nfc``, ``spotify``, ``device``, and ``db`` each rebuild
-        only themselves, so a wifi update does not rebuild the catalog.
+        ``wifi``, ``nfc``, ``spotify``, ``userMessages``, ``device``, and
+        ``db`` each rebuild only themselves, so a wifi update does not
+        rebuild the catalog.
         """
         _replace_slices(self.raw, payload)
         self.available = True
@@ -357,6 +390,8 @@ class JookiState:
             self._rebuild_nfc()
         if "spotify" in payload:
             self._rebuild_spotify()
+        if "userMessages" in payload:
+            self._rebuild_user_messages()
         if "device" in payload:
             self._rebuild_device()
         if "db" in payload:
@@ -595,6 +630,27 @@ class JookiState:
             )
         else:
             self.spotify = JookiSpotifyState()
+
+    # -- Device messages ------------------------------------------------
+
+    def _rebuild_user_messages(self) -> None:
+        """Replace messages when this slice is present.
+
+        A list replaces the typed list. Anything else clears it, including
+        a value that is not a list of objects. Unknown item shapes are
+        ignored.
+        """
+        raw = self.raw.get("userMessages")
+        if not isinstance(raw, list):
+            self.user_messages = []
+            return
+
+        messages: list[JookiUserMessage] = []
+        for item in raw:
+            message = _user_message(item)
+            if message is not None:
+                messages.append(message)
+        self.user_messages = messages
 
     # -- Device ---------------------------------------------------------
 

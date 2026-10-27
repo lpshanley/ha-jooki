@@ -152,6 +152,57 @@ def test_empty_nfc_list_clears_figurine(models):
     assert "p" in state.db.playlists
 
 
+def test_user_messages_survive_wifi_and_replace_on_their_own_key(models):
+    """``userMessages`` is its own slice and unknown items are ignored."""
+    state = models.JookiState()
+    state.apply_slices(
+        {
+            "userMessages": [
+                {
+                    "id": 1,
+                    "level": "ERROR",
+                    "messageType": "disk.full",
+                    "extra": {"detail_msg": "full"},
+                },
+                "nope",
+                {"unexpected": True},
+                {"id": 2, "level": "INFO", "messageType": "hello"},
+            ],
+            "wifi": {"ssid": "old"},
+        }
+    )
+
+    assert [(m.id, m.level, m.message_type) for m in state.user_messages] == [
+        (1, "ERROR", "disk.full"),
+        (2, "INFO", "hello"),
+    ]
+    assert state.user_messages[0].extra == {"detail_msg": "full"}
+
+    state.apply_slices({"wifi": {"ssid": "net"}})
+
+    assert [m.id for m in state.user_messages] == [1, 2]
+    assert state.wifi.ssid == "net"
+
+    state.apply_slices(
+        {"userMessages": [{"id": 3, "level": "INFO", "messageType": "newer"}]}
+    )
+
+    assert [m.message_type for m in state.user_messages] == ["newer"]
+    assert state.wifi.ssid == "net"
+
+    state.apply_slices({"userMessages": {}})
+
+    assert state.user_messages == []
+    assert state.wifi.ssid == "net"
+
+    state.apply_slices(
+        {"userMessages": [{"id": 4, "level": "INFO", "messageType": "again"}]}
+    )
+    state.apply_slices({"userMessages": []})
+
+    assert state.user_messages == []
+
+
 def test_mapped_device_wifi_and_catalog_fields(models):
     """Disk usage, wifi, and playlist/token/track rows keep their mapping."""
     state = models.JookiState()
