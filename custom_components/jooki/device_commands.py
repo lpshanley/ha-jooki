@@ -1,12 +1,17 @@
 """Topic and payload encoding for outbound Jooki commands.
 
-This module does not import Home Assistant or paho. Tests load this file by path.
+This module does not import Home Assistant or paho. ``JookiMqttClient`` calls
+these functions; tests load this file by path. ``JookiDevice`` is the surface
+stored on a config entry for platform modules.
 """
 
 from __future__ import annotations
 
 import json
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:  # path-loaded tests must not execute a package import
+    from .models import JookiState
 
 
 class CommandTopics(Protocol):
@@ -127,3 +132,98 @@ def turn_off_led(config: CommandTopics) -> tuple[str, str]:
 def skip_seconds(config: CommandTopics, delta_s: int) -> tuple[str, str]:
     """Return SKIP_SEC. ``delta_s`` is a number of seconds, negative to go back."""
     return config.topic_skip_sec, json.dumps({"delta_s": delta_s})
+
+
+class JookiDevice(Protocol):
+    """Device operations and read-only state for entity modules."""
+
+    @property
+    def state(self) -> JookiState:
+        """Current device state."""
+        ...
+
+    @property
+    def host(self) -> str:
+        """Device host address."""
+        ...
+
+    @property
+    def model_name(self) -> str:
+        """Model name for this device family."""
+        ...
+
+    async def async_resync(self) -> None:
+        """Request a full state dump."""
+        ...
+
+    async def async_play(self) -> None:
+        """Send play."""
+        ...
+
+    async def async_pause(self) -> None:
+        """Send pause."""
+        ...
+
+    async def async_next_track(self) -> None:
+        """Send next track."""
+        ...
+
+    async def async_previous_track(self) -> None:
+        """Send previous track."""
+        ...
+
+    async def async_seek(self, position: float) -> None:
+        """Seek to a position in seconds."""
+        ...
+
+    async def async_set_volume(self, volume: float) -> None:
+        """Set volume from a 0.0 to 1.0 level."""
+        ...
+
+    async def async_set_repeat_mode(self, mode: int) -> None:
+        """Set repeat mode from the device value 0, 1, or 2."""
+        ...
+
+    async def async_set_shuffle(self, shuffle: bool) -> None:
+        """Set shuffle mode."""
+        ...
+
+    async def async_shutdown(self) -> None:
+        """Shut down the device."""
+        ...
+
+    async def async_play_playlist(self, playlist_id: str, track_index: int) -> None:
+        """Play a playlist from ``track_index``."""
+        ...
+
+    async def async_send_nfc_tag(self, payload: str) -> None:
+        """Send an NFC tag payload string unchanged."""
+        ...
+
+    async def async_set_toy_safe(self, enable: bool) -> None:
+        """Enable or disable Toy Safe mode."""
+        ...
+
+    async def async_set_locale(self, locale_code: str) -> None:
+        """Switch the device language."""
+        ...
+
+    async def async_set_led_raw(self, r: int, g: int, b: int) -> None:
+        """Set the LED ring to an RGB color."""
+        ...
+
+    async def async_pulse_led(self, payload: str) -> None:
+        """Send a pulse_raw wire string."""
+        ...
+
+    async def async_set_charge_effect(self, effect: str) -> None:
+        """Send a charge_state token."""
+        ...
+
+    async def async_turn_off_led(self) -> None:
+        """Turn the LED ring off."""
+        ...
+
+    async def async_skip_seconds(self, delta_s: int) -> None:
+        """Skip forward or backward by ``delta_s`` seconds."""
+        ...
