@@ -294,6 +294,39 @@ class JookiState:
         self.available = True
         self._rebuild_from_raw()
 
+    def apply_gstreamer_audio(self, event: str, payload: dict | None = None) -> bool:
+        """Record a local GStreamer audio event on ``audio.playback``.
+
+        ``/j/audio/input/position`` payloads are ``{"id": N, "pos": N}`` with
+        ``pos`` in milliseconds. Transport events set the playback state.
+        Returns False when the event does not change state.
+        """
+        audio = self.raw.get("audio")
+        if not isinstance(audio, dict):
+            audio = {}
+            self.raw["audio"] = audio
+        playback = audio.get("playback")
+        if not isinstance(playback, dict):
+            playback = {}
+            audio["playback"] = playback
+
+        if event == "position":
+            if not isinstance(payload, dict) or "pos" not in payload:
+                return False
+            try:
+                playback["position_ms"] = int(payload["pos"])
+            except (TypeError, ValueError):
+                return False
+        elif event in {"playing", "paused", "stopped", "ended"}:
+            playback["state"] = event
+            if event == "ended":
+                playback["position_ms"] = None
+        else:
+            return False
+
+        self._rebuild_from_raw()
+        return True
+
     # ------------------------------------------------------------------
     # Rebuild typed state from raw dict
     # ------------------------------------------------------------------

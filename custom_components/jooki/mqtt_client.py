@@ -290,33 +290,10 @@ class JookiMqttClient:
         )
 
     def _handle_audio_event(self, topic: str, msg: mqtt.MQTTMessage) -> None:
-        """Handle audio subsystem events for improved state tracking."""
+        """Apply GStreamer audio events into accumulated playback state."""
         cfg = self._device_config
 
-        if topic == cfg.topic_audio_position:
-            try:
-                payload = json.loads(msg.payload)
-                pos = payload.get("pos")
-                if pos is not None:
-                    self._state.playback_info.position_ms = int(pos)
-                    self._state._rebuild_facade()
-                    self._dispatch_state()
-            except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
-                _LOGGER.warning(
-                    "Invalid audio position payload: %s", msg.payload[:200]
-                )
-            return
-
-        if topic == cfg.topic_audio_playing:
-            self._state.playback_info.state = "playing"
-        elif topic == cfg.topic_audio_paused:
-            self._state.playback_info.state = "paused"
-        elif topic == cfg.topic_audio_stopped:
-            self._state.playback_info.state = "idle"
-        elif topic == cfg.topic_audio_ended:
-            self._state.playback_info.state = "idle"
-            self._state.playback_info.position_ms = None
-        elif topic == cfg.topic_audio_error:
+        if topic == cfg.topic_audio_error:
             try:
                 payload = json.loads(msg.payload)
                 _LOGGER.warning("Jooki audio error: %s", payload)
@@ -324,8 +301,28 @@ class JookiMqttClient:
                 _LOGGER.warning("Jooki audio error (unparseable payload)")
             return
 
-        self._state._rebuild_facade()
-        self._dispatch_state()
+        event = {
+            cfg.topic_audio_position: "position",
+            cfg.topic_audio_playing: "playing",
+            cfg.topic_audio_paused: "paused",
+            cfg.topic_audio_stopped: "stopped",
+            cfg.topic_audio_ended: "ended",
+        }.get(topic)
+        if event is None:
+            return
+
+        payload = None
+        if event == "position":
+            try:
+                payload = json.loads(msg.payload)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                _LOGGER.warning(
+                    "Invalid audio position payload: %s", msg.payload[:200]
+                )
+                return
+
+        if self._state.apply_gstreamer_audio(event, payload):
+            self._dispatch_state()
 
     def _handle_error(self, msg: mqtt.MQTTMessage) -> None:
         """Handle an error/info message from the device."""
