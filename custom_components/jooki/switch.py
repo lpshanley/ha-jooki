@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
@@ -13,7 +12,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import JookiConfigEntry
 from .const import DOMAIN, SIGNAL_STATE_UPDATED
-from .mqtt_client import JookiMqttClient
+from .device_commands import JookiDevice
 
 
 async def async_setup_entry(
@@ -33,10 +32,9 @@ class JookiToySafeSwitch(SwitchEntity):
     _attr_icon = "mdi:ear-hearing"
     _attr_entity_category = EntityCategory.CONFIG
 
-    def __init__(self, client: JookiMqttClient, entry: JookiConfigEntry) -> None:
+    def __init__(self, client: JookiDevice, entry: JookiConfigEntry) -> None:
         """Initialize the Toy Safe switch."""
         self._client = client
-        self._cfg = client.device_config
         self._attr_unique_id = f"{entry.entry_id}_toy_safe"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
@@ -71,9 +69,7 @@ class JookiToySafeSwitch(SwitchEntity):
         so we optimistically update the local state after publishing.
         If async_publish raises, execution stops before the update.
         """
-        await self._client.async_publish(
-            self._cfg.topic_set_toy_safe, json.dumps({"enable": True})
-        )
+        await self._client.async_set_toy_safe(True)
         self._client.state.device.toy_safe = True
         self.async_write_ha_state()
 
@@ -83,6 +79,4 @@ class JookiToySafeSwitch(SwitchEntity):
         The device emits a state update with toy_safe=false and
         TOY_SAFE_OFF in flags when disabling.
         """
-        await self._client.async_publish(
-            self._cfg.topic_set_toy_safe, json.dumps({"enable": False})
-        )
+        await self._client.async_set_toy_safe(False)

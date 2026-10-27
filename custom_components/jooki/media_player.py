@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from datetime import datetime
 from typing import Any
 
@@ -31,8 +30,8 @@ from .const import (
     MEDIA_TYPE_TRACK,
     SIGNAL_STATE_UPDATED,
 )
+from .device_commands import JookiDevice
 from .models import JookiPlaylist, nfc_tag_payload, playlist_id_for_figurine
-from .mqtt_client import JookiMqttClient
 
 _PLAYBACK_STATE_MAP = {
     "playing": MediaPlayerState.PLAYING,
@@ -80,17 +79,16 @@ class JookiMediaPlayer(MediaPlayerEntity):
         | MediaPlayerEntityFeature.PLAY_MEDIA
     )
 
-    def __init__(self, client: JookiMqttClient, entry: JookiConfigEntry) -> None:
+    def __init__(self, client: JookiDevice, entry: JookiConfigEntry) -> None:
         """Initialize the media player."""
         self._client = client
-        self._cfg = client.device_config
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_media_player"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
             name=entry.title,
             manufacturer="Jooki",
-            model=self._cfg.model_name,
+            model=client.model_name,
         )
         self._signal = SIGNAL_STATE_UPDATED.format(entry.entry_id)
         self._device_info_enriched = False
@@ -132,7 +130,7 @@ class JookiMediaPlayer(MediaPlayerEntity):
             identifiers={(DOMAIN, self._entry.entry_id)},
             name=self._entry.title,
             manufacturer="Jooki",
-            model=self._cfg.model_name,
+            model=self._client.model_name,
             sw_version=device_state.firmware,
             hw_version=device_state.machine,
             connections=connections,
@@ -347,7 +345,7 @@ class JookiMediaPlayer(MediaPlayerEntity):
                 raise HomeAssistantError(
                     f"Figurine '{media_id}' has no matching playlist and is not a valid NFC tag"
                 )
-            await self._client.async_publish(self._cfg.topic_nfc_tag, payload)
+            await self._client.async_send_nfc_tag(payload)
             return
 
         if media_type == MEDIA_TYPE_PLAYLIST:
@@ -379,10 +377,7 @@ class JookiMediaPlayer(MediaPlayerEntity):
             playlist = db.playlists.get(playlist_id)
             track_index = 0 if (playlist and playlist.spotify_uri) else 1
 
-        await self._client.async_publish(
-            self._cfg.topic_playlist_play,
-            json.dumps({"playlistId": playlist_id, "trackIndex": track_index}),
-        )
+        await self._client.async_play_playlist(playlist_id, track_index)
 
     async def _play_track(self, track_id: str) -> None:
         """Find which playlist contains a track and play from that index."""
@@ -397,49 +392,37 @@ class JookiMediaPlayer(MediaPlayerEntity):
 
     async def async_media_seek(self, position: float) -> None:
         """Seek to a position in the current track (seconds)."""
-        await self._client.async_publish(
-            self._cfg.topic_seek,
-            json.dumps({"position_ms": str(position * 1000)}),
-        )
+        await self._client.async_seek(position)
 
     async def async_media_play(self) -> None:
         """Send play command."""
-        await self._client.async_publish(self._cfg.topic_do_play, "{}")
+        await self._client.async_play()
 
     async def async_media_pause(self) -> None:
         """Send pause command."""
-        await self._client.async_publish(self._cfg.topic_do_pause, "{}")
+        await self._client.async_pause()
 
     async def async_media_next_track(self) -> None:
         """Send next track command."""
-        await self._client.async_publish(self._cfg.topic_do_next, "{}")
+        await self._client.async_next_track()
 
     async def async_media_previous_track(self) -> None:
         """Send previous track command."""
-        await self._client.async_publish(self._cfg.topic_do_prev, "{}")
+        await self._client.async_previous_track()
 
     async def async_set_volume_level(self, volume: float) -> None:
         """Set volume level (0.0 to 1.0)."""
-        scaled = int(volume * MAX_VOLUME)
-        await self._client.async_publish(
-            self._cfg.topic_set_vol, json.dumps({"vol": str(scaled)})
-        )
+        await self._client.async_set_volume(volume)
 
     async def async_set_repeat(self, repeat: RepeatMode) -> None:
         """Set repeat mode."""
         mode = _HA_TO_JOOKI_REPEAT.get(repeat, 0)
-        await self._client.async_publish(
-            self._cfg.topic_set_cfg, json.dumps({"repeat_mode": mode})
-        )
+        await self._client.async_set_repeat_mode(mode)
 
     async def async_set_shuffle(self, shuffle: bool) -> None:
         """Set shuffle mode."""
-        await self._client.async_publish(
-            self._cfg.topic_set_cfg, json.dumps({"shuffle_mode": shuffle})
-        )
+        await self._client.async_set_shuffle(shuffle)
 
     async def async_turn_off(self) -> None:
         """Shut down the Jooki."""
-        await self._client.async_publish(
-            self._cfg.topic_shutdown, json.dumps({"src": "from-web"})
-        )
+        await self._client.async_shutdown()

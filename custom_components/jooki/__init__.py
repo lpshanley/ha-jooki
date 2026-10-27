@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import json
+from typing import cast
 
 import voluptuous as vol
 
@@ -12,10 +12,12 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv, device_registry as dr
 
-from .const import CONF_DEVICE_VERSION, DEVICE_VERSION_V1, DOMAIN, PLATFORMS, get_device_config
+from .const import CONF_DEVICE_VERSION, DEVICE_VERSION_V1, DOMAIN, PLATFORMS
+from .device_commands import JookiDevice
+from .device_config import get_device_config
 from .mqtt_client import JookiMqttClient
 
-type JookiConfigEntry = ConfigEntry[JookiMqttClient]
+type JookiConfigEntry = ConfigEntry[JookiDevice]
 
 SERVICE_SKIP_SECONDS = "skip_seconds"
 SERVICE_SKIP_SECONDS_SCHEMA = vol.Schema(
@@ -69,11 +71,8 @@ def _register_services(hass: HomeAssistant) -> None:
         for entry_id in device.config_entries:
             entry = hass.config_entries.async_get_entry(entry_id)
             if entry and entry.domain == DOMAIN:
-                client: JookiMqttClient = entry.runtime_data
-                await client.async_publish(
-                    client.device_config.topic_skip_sec,
-                    json.dumps({"delta_s": delta_s}),
-                )
+                client: JookiDevice = entry.runtime_data
+                await client.async_skip_seconds(delta_s)
                 return
 
         raise ServiceValidationError(
@@ -93,5 +92,5 @@ async def async_unload_entry(hass: HomeAssistant, entry: JookiConfigEntry) -> bo
     """Unload a Jooki config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        await entry.runtime_data.async_stop()
+        await cast(JookiMqttClient, entry.runtime_data).async_stop()
     return unload_ok

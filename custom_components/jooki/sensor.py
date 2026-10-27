@@ -22,8 +22,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import JookiConfigEntry
 from .const import DOMAIN, SIGNAL_STATE_UPDATED
+from .device_commands import JookiDevice
 from .models import JookiState
-from .mqtt_client import JookiMqttClient
 
 
 def _disk_usage_percent(state: JookiState) -> int | None:
@@ -189,7 +189,7 @@ class JookiSensor(SensorEntity):
 
     def __init__(
         self,
-        client: JookiMqttClient,
+        client: JookiDevice,
         entry: JookiConfigEntry,
         key: str,
         name: str,

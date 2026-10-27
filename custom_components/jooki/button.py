@@ -9,7 +9,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import JookiConfigEntry
 from .const import DOMAIN
-from .mqtt_client import JookiMqttClient
+from .device_commands import JookiDevice
 
 
 async def async_setup_entry(
@@ -29,7 +29,7 @@ class JookiResyncButton(ButtonEntity):
     _attr_icon = "mdi:sync"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
-    def __init__(self, client: JookiMqttClient, entry: JookiConfigEntry) -> None:
+    def __init__(self, client: JookiDevice, entry: JookiConfigEntry) -> None:
         """Initialize the resync button."""
         self._client = client
         self._attr_unique_id = f"{entry.entry_id}_resync"

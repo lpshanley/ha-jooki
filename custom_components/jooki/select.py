@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-
 from homeassistant.components.select import SelectEntity
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -12,8 +10,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import JookiConfigEntry
 from .const import DOMAIN, SIGNAL_STATE_UPDATED
+from .device_commands import JookiDevice
 from .models import retained_locale
-from .mqtt_client import JookiMqttClient
 
 LOCALE_OPTIONS: dict[str, str] = {
     "English": "en",
@@ -42,10 +40,9 @@ class JookiLocaleSelect(SelectEntity):
     _attr_entity_category = EntityCategory.CONFIG
     _attr_options = list(LOCALE_OPTIONS.keys())
 
-    def __init__(self, client: JookiMqttClient, entry: JookiConfigEntry) -> None:
+    def __init__(self, client: JookiDevice, entry: JookiConfigEntry) -> None:
         """Initialize the locale select entity."""
         self._client = client
-        self._cfg = client.device_config
         self._attr_unique_id = f"{entry.entry_id}_locale_select"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
@@ -78,9 +75,6 @@ class JookiLocaleSelect(SelectEntity):
         """Handle the user selecting a language."""
         locale_code = LOCALE_OPTIONS.get(option)
         if locale_code:
-            await self._client.async_publish(
-                self._cfg.topic_switch_locale,
-                json.dumps({"locale": locale_code}),
-            )
+            await self._client.async_set_locale(locale_code)
             self._attr_current_option = option
             self.async_write_ha_state()

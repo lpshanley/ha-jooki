@@ -15,8 +15,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import JookiConfigEntry
 from .const import DOMAIN, SIGNAL_STATE_UPDATED
+from .device_commands import JookiDevice
 from .models import JookiState
-from .mqtt_client import JookiMqttClient
 
 
 async def async_setup_entry(
@@ -88,7 +88,7 @@ class JookiBinarySensor(BinarySensorEntity):
 
     def __init__(
         self,
-        client: JookiMqttClient,
+        client: JookiDevice,
         entry: JookiConfigEntry,
         key: str,
         name: str,

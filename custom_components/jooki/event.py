@@ -12,7 +12,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import JookiConfigEntry
 from .const import DOMAIN, SIGNAL_BUTTON_EVENT, SIGNAL_NFC_EVENT, SIGNAL_VOLUME_EVENT
-from .mqtt_client import JookiMqttClient
+from .device_commands import JookiDevice
 
 
 async def async_setup_entry(
@@ -39,7 +39,7 @@ class JookiNfcEvent(EventEntity):
     _attr_icon = "mdi:teddy-bear"
     _attr_event_types = ["figurine_placed", "figurine_removed"]
 
-    def __init__(self, client: JookiMqttClient, entry: JookiConfigEntry) -> None:
+    def __init__(self, client: JookiDevice, entry: JookiConfigEntry) -> None:
         """Initialize the NFC event entity."""
         self._client = client
         self._attr_unique_id = f"{entry.entry_id}_nfc_event"
@@ -78,7 +78,7 @@ class JookiButtonEvent(EventEntity):
 
     def __init__(
         self,
-        client: JookiMqttClient,
+        client: JookiDevice,
         entry: JookiConfigEntry,
         button_key: str,
         name: str,
@@ -123,7 +123,7 @@ class JookiVolumeKnobEvent(EventEntity):
     _attr_icon = "mdi:knob"
     _attr_event_types = ["volume_changed"]
 
-    def __init__(self, client: JookiMqttClient, entry: JookiConfigEntry) -> None:
+    def __init__(self, client: JookiDevice, entry: JookiConfigEntry) -> None:
         """Initialize the volume knob event entity."""
         self._client = client
         self._attr_unique_id = f"{entry.entry_id}_volume_knob"

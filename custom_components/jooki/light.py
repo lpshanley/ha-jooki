@@ -19,7 +19,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import JookiConfigEntry
 from .const import DOMAIN, SIGNAL_STATE_UPDATED
-from .mqtt_client import JookiMqttClient
+from .device_commands import JookiDevice
 
 EFFECT_PULSE_RED = "Pulse Red"
 EFFECT_PULSE_GREEN = "Pulse Green"
@@ -63,10 +63,9 @@ class JookiLedLight(LightEntity):
     _attr_effect_list = ALL_EFFECTS
     _attr_entity_category = EntityCategory.CONFIG
 
-    def __init__(self, client: JookiMqttClient, entry: JookiConfigEntry) -> None:
+    def __init__(self, client: JookiDevice, entry: JookiConfigEntry) -> None:
         """Initialize the LED ring light."""
         self._client = client
-        self._cfg = client.device_config
         self._attr_unique_id = f"{entry.entry_id}_led_ring"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
@@ -119,27 +118,23 @@ class JookiLedLight(LightEntity):
 
         self._attr_effect = None
         r, g, b = self._rgb_color
-        await self._client.async_publish(self._cfg.topic_led_set_raw, f"ALL,{r},{g},{b}")
+        await self._client.async_set_led_raw(r, g, b)
         self._is_on = True
         self.async_write_ha_state()
 
     async def _apply_effect(self, effect: str) -> bool:
         """Apply a pulse or charge animation effect. Returns True on success."""
         if effect in PULSE_EFFECTS:
-            await self._client.async_publish(
-                self._cfg.topic_led_pulse_raw, PULSE_EFFECTS[effect]
-            )
+            await self._client.async_pulse_led(PULSE_EFFECTS[effect])
             return True
         if effect in CHARGE_EFFECTS:
-            await self._client.async_publish(
-                self._cfg.topic_led_charge_state, CHARGE_EFFECTS[effect]
-            )
+            await self._client.async_set_charge_effect(CHARGE_EFFECTS[effect])
             return True
         raise HomeAssistantError(f"Unknown LED effect '{effect}'")
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the LED ring."""
-        await self._client.async_publish(self._cfg.topic_led_set_raw, "ALL,0,0,0")
+        await self._client.async_turn_off_led()
         self._is_on = False
         self._attr_effect = None
         self.async_write_ha_state()
