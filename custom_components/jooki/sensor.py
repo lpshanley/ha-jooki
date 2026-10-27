@@ -49,6 +49,27 @@ def _current_playlist(state: JookiState) -> str | None:
     return playlist.title if playlist else pid
 
 
+def _device_message(state: JookiState) -> str | None:
+    """Return the newest device message type, or None when there are none."""
+    if not state.user_messages:
+        return None
+    return state.user_messages[-1].message_type
+
+
+def _device_message_attributes(state: JookiState) -> dict[str, Any]:
+    """Return id, level, and message type for each device message."""
+    return {
+        "messages": [
+            {
+                "id": message.id,
+                "level": message.level,
+                "message_type": message.message_type,
+            }
+            for message in state.user_messages
+        ]
+    }
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: JookiConfigEntry,
@@ -148,6 +169,15 @@ async def async_setup_entry(
         JookiSensor(
             client=client,
             entry=entry,
+            key="device_message",
+            name="Device Message",
+            icon="mdi:message-text",
+            value_fn=_device_message,
+            attributes_fn=_device_message_attributes,
+        ),
+        JookiSensor(
+            client=client,
+            entry=entry,
             key="nfc_tag_id",
             name="NFC Tag ID",
             icon="mdi:nfc-variant",
@@ -213,10 +243,12 @@ class JookiSensor(SensorEntity):
         state_class: SensorStateClass | None = None,
         icon: str | None = None,
         entity_category: EntityCategory | None = None,
+        attributes_fn: Callable[[JookiState], dict[str, Any]] | None = None,
     ) -> None:
         """Initialize the sensor."""
         self._client = client
         self._value_fn = value_fn
+        self._attributes_fn = attributes_fn
         self._attr_name = name
         self._attr_unique_id = f"{entry.entry_id}_{key}"
         self._attr_device_class = device_class
@@ -250,3 +282,10 @@ class JookiSensor(SensorEntity):
     def native_value(self) -> Any:
         """Return the sensor value."""
         return self._value_fn(self._client.state)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return extra attributes when this sensor defines them."""
+        if self._attributes_fn is None:
+            return None
+        return self._attributes_fn(self._client.state)
