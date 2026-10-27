@@ -81,6 +81,16 @@ async def async_setup_entry(
         JookiBinarySensor(
             client=client,
             entry=entry,
+            key="deezer_connected",
+            name="Deezer Connected",
+            device_class=BinarySensorDeviceClass.CONNECTIVITY,
+            icon="mdi:deezer",
+            value_fn=lambda s: s.deezer.active,
+            entity_category=EntityCategory.DIAGNOSTIC,
+        ),
+        JookiBinarySensor(
+            client=client,
+            entry=entry,
             key="audiobook",
             name="Audiobook",
             icon="mdi:book-music",

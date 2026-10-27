@@ -213,6 +213,14 @@ class JookiSpotifyState:
 
 
 @dataclass
+class JookiDeezerState:
+    """Deezer connection state (v2: deezer)."""
+
+    active: bool = False
+    username: str | None = None
+
+
+@dataclass
 class JookiUserMessage:
     """One message the player wants a parent to see (v2: userMessages)."""
 
@@ -368,6 +376,7 @@ class JookiState:
     bluetooth: JookiBluetoothState = field(default_factory=JookiBluetoothState)
     nfc: JookiNfcState = field(default_factory=JookiNfcState)
     spotify: JookiSpotifyState = field(default_factory=JookiSpotifyState)
+    deezer: JookiDeezerState = field(default_factory=JookiDeezerState)
     user_messages: list[JookiUserMessage] = field(default_factory=list)
     device: JookiDeviceInfo = field(default_factory=JookiDeviceInfo)
     db: JookiDatabaseState = field(default_factory=JookiDatabaseState)
@@ -384,9 +393,9 @@ class JookiState:
 
         Sets ``available``. Only top-level keys in *payload* are rebuilt.
         ``audio`` rebuilds audio and the playback facade. ``power``,
-        ``wifi``, ``bluetooth``, ``nfc``, ``spotify``, ``userMessages``,
-        ``device``, and ``db`` each rebuild only themselves, so a wifi
-        update does not rebuild the catalog.
+        ``wifi``, ``bluetooth``, ``nfc``, ``spotify``, ``deezer``,
+        ``userMessages``, ``device``, and ``db`` each rebuild only
+        themselves, so a wifi update does not rebuild the catalog.
         """
         _replace_slices(self.raw, payload)
         self.available = True
@@ -403,6 +412,8 @@ class JookiState:
             self._rebuild_nfc()
         if "spotify" in payload:
             self._rebuild_spotify()
+        if "deezer" in payload:
+            self._rebuild_deezer()
         if "userMessages" in payload:
             self._rebuild_user_messages()
         if "device" in payload:
@@ -659,6 +670,18 @@ class JookiState:
             )
         else:
             self.spotify = JookiSpotifyState()
+
+    # -- Deezer ---------------------------------------------------------
+
+    def _rebuild_deezer(self) -> None:
+        deezer_data = self.raw.get("deezer")
+        if isinstance(deezer_data, dict):
+            self.deezer = JookiDeezerState(
+                active=bool(deezer_data.get("active", False)),
+                username=deezer_data.get("username"),
+            )
+        else:
+            self.deezer = JookiDeezerState()
 
     # -- Device messages ------------------------------------------------
 

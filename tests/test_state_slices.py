@@ -167,6 +167,40 @@ def test_empty_nfc_list_clears_figurine(models):
     assert "p" in state.db.playlists
 
 
+def test_deezer_survives_wifi_and_replaces_on_its_own_key(models):
+    """``deezer`` matches the Spotify slice: a non-dict clears it."""
+    state = models.JookiState()
+    state.apply_slices(
+        {
+            "deezer": {"active": True, "username": "kid"},
+            "wifi": {"ssid": "old"},
+            "spotify": {"active": True, "username": "spotify-user"},
+        }
+    )
+
+    assert state.deezer.active is True
+    assert state.deezer.username == "kid"
+
+    state.apply_slices({"wifi": {"ssid": "net"}})
+
+    assert state.deezer.active is True
+    assert state.deezer.username == "kid"
+    assert state.spotify.username == "spotify-user"
+    assert state.wifi.ssid == "net"
+
+    state.apply_slices({"deezer": {"active": False, "username": "other"}})
+
+    assert state.deezer.active is False
+    assert state.deezer.username == "other"
+    assert state.spotify.username == "spotify-user"
+
+    state.apply_slices({"deezer": []})
+
+    assert state.deezer.active is False
+    assert state.deezer.username is None
+    assert state.wifi.ssid == "net"
+
+
 def test_bluetooth_survives_wifi_and_replaces_on_its_own_key(models):
     """``bluetooth.connected_mac`` is its own slice. A non-dict clears it."""
     state = models.JookiState()

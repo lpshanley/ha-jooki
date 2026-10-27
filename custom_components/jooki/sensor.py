@@ -205,6 +205,15 @@ async def async_setup_entry(
         JookiSensor(
             client=client,
             entry=entry,
+            key="deezer_username",
+            name="Deezer Username",
+            icon="mdi:deezer",
+            entity_category=EntityCategory.DIAGNOSTIC,
+            value_fn=lambda s: s.deezer.username,
+        ),
+        JookiSensor(
+            client=client,
+            entry=entry,
             key="firmware",
             name="Firmware",
             icon="mdi:chip",
