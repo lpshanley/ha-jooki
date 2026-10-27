@@ -83,6 +83,21 @@ def test_battery_temperature_follows_the_power_slice(models):
     assert state.db.playlists["pl1"].title == "Dragons"
 
 
+def test_now_playing_omitting_restricted_stays_false(models):
+    """A replaced nowPlaying slice that omits ``restricted`` is not explicit."""
+    state = models.JookiState()
+    state.apply_slices(
+        {"audio": {"nowPlaying": {"track": "Song", "restricted": True}}}
+    )
+
+    assert state.now_playing.restricted is True
+
+    state.apply_slices({"audio": {"nowPlaying": {"track": "Other"}}})
+
+    assert state.now_playing.track == "Other"
+    assert state.now_playing.restricted is False
+
+
 def test_replaced_now_playing_omitting_album_drops_it(models):
     """A nowPlaying slice is replaced, so a missing album is not kept."""
     state = models.JookiState()

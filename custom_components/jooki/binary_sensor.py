@@ -86,6 +86,14 @@ async def async_setup_entry(
             icon="mdi:book-music",
             value_fn=lambda s: s.now_playing.audiobook,
         ),
+        JookiBinarySensor(
+            client=client,
+            entry=entry,
+            key="explicit",
+            name="Explicit",
+            icon="mdi:explicit",
+            value_fn=lambda s: s.now_playing.restricted,
+        ),
     ])
 
 
