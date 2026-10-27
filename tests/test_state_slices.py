@@ -47,6 +47,42 @@ def test_playback_slice_keeps_playlists_battery_and_now_playing(models):
     assert state.playback.track == "Song"
 
 
+def test_battery_temperature_follows_the_power_slice(models):
+    """``power.level.t`` is millidegrees C and is cleared when omitted.
+
+    An audio slice does not rebuild power, so the reading stays. A later
+    power slice that omits ``t`` drops it. Playlists are a different slice.
+    """
+    state = models.JookiState()
+    state.apply_slices(
+        {
+            "db": {"playlists": {"pl1": {"title": "Dragons"}}},
+            "power": {
+                "charging": False,
+                "connected": True,
+                "level": {"p": 845, "mv": 3800, "t": 40000},
+            },
+        }
+    )
+
+    assert state.power.battery_c == 40.0
+    assert state.db.playlists["pl1"].title == "Dragons"
+
+    state.apply_slices({"audio": {"config": {"volume": 12}}})
+
+    assert state.power.battery_c == 40.0
+    assert state.audio_config.volume == 12
+
+    state.apply_slices(
+        {"power": {"charging": True, "level": {"p": 500, "mv": 3700}}}
+    )
+
+    assert state.power.battery_c is None
+    assert state.power.battery_percent == 50.0
+    assert state.power.charging is True
+    assert state.db.playlists["pl1"].title == "Dragons"
+
+
 def test_replaced_now_playing_omitting_album_drops_it(models):
     """A nowPlaying slice is replaced, so a missing album is not kept."""
     state = models.JookiState()

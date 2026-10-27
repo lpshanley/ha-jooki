@@ -260,6 +260,7 @@ class JookiPowerState:
     connected: bool = False
     battery_percent: float = 0.0
     battery_mv: int = 0
+    battery_c: float | None = None
 
 
 @dataclass
@@ -458,17 +459,25 @@ class JookiState:
         if not isinstance(level_data, dict):
             level_data = {}
 
-        # ``p`` is tenths of a percent (1000 = 100.0%). Omitted fields belong
-        # to this replaced slice, so they do not keep the previous reading.
+        # ``p`` is tenths of a percent (1000 = 100.0%). ``t`` is millidegrees C
+        # (40000 = 40.0°C). Omitted fields belong to this replaced slice, so
+        # they do not keep the previous reading. Temperature is not retained
+        # the way Toy Safe is.
         if "p" in level_data:
             battery_percent = level_data["p"] / 10.0
         else:
             battery_percent = 0.0
+        temp = level_data.get("t")
+        if isinstance(temp, (int, float)) and not isinstance(temp, bool):
+            battery_c = temp / 1000
+        else:
+            battery_c = None
         self.power = JookiPowerState(
             charging=bool(power_data.get("charging", False)),
             connected=bool(power_data.get("connected", False)),
             battery_percent=battery_percent,
             battery_mv=level_data.get("mv", 0) or 0,
+            battery_c=battery_c,
         )
 
     # -- Audio (config / nowPlaying / playback) -------------------------

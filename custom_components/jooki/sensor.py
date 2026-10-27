@@ -14,6 +14,7 @@ from homeassistant.const import (
     PERCENTAGE,
     SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
     UnitOfElectricPotential,
+    UnitOfTemperature,
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -65,6 +66,16 @@ async def async_setup_entry(
             native_unit=PERCENTAGE,
             state_class=SensorStateClass.MEASUREMENT,
             value_fn=lambda s: s.power.battery_percent,
+        ),
+        JookiSensor(
+            client=client,
+            entry=entry,
+            key="battery_temperature",
+            name="Battery Temperature",
+            device_class=SensorDeviceClass.TEMPERATURE,
+            native_unit=UnitOfTemperature.CELSIUS,
+            state_class=SensorStateClass.MEASUREMENT,
+            value_fn=lambda s: s.power.battery_c,
         ),
         JookiSensor(
             client=client,
