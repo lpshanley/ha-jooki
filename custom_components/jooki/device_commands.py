@@ -88,3 +88,42 @@ def play_playlist(
         {"playlistId": playlist_id, "trackIndex": track_index}
     )
 
+
+def nfc_tag(config: CommandTopics, payload: str) -> tuple[str, str]:
+    """Return the NFC tag topic and the payload string unchanged."""
+    return config.topic_nfc_tag, payload
+
+
+def set_toy_safe(config: CommandTopics, enable: bool) -> tuple[str, str]:
+    """Return SET_TOY_SAFE for enable true or false."""
+    return config.topic_set_toy_safe, json.dumps({"enable": enable})
+
+
+def set_locale(config: CommandTopics, locale_code: str) -> tuple[str, str]:
+    """Return SWITCH_LOCALE for a language code such as ``en``."""
+    return config.topic_switch_locale, json.dumps({"locale": locale_code})
+
+
+def set_led_raw(config: CommandTopics, r: int, g: int, b: int) -> tuple[str, str]:
+    """Return set_raw and ``ALL,r,g,b``."""
+    return config.topic_led_set_raw, f"ALL,{r},{g},{b}"
+
+
+def pulse_led(config: CommandTopics, payload: str) -> tuple[str, str]:
+    """Return pulse_raw and a wire string the caller already looked up."""
+    return config.topic_led_pulse_raw, payload
+
+
+def set_charge_effect(config: CommandTopics, effect: str) -> tuple[str, str]:
+    """Return charge_state and a wire token such as ``BAT_INC``."""
+    return config.topic_led_charge_state, effect
+
+
+def turn_off_led(config: CommandTopics) -> tuple[str, str]:
+    """Return set_raw and ``ALL,0,0,0``."""
+    return config.topic_led_set_raw, "ALL,0,0,0"
+
+
+def skip_seconds(config: CommandTopics, delta_s: int) -> tuple[str, str]:
+    """Return SKIP_SEC. ``delta_s`` is a number of seconds, negative to go back."""
+    return config.topic_skip_sec, json.dumps({"delta_s": delta_s})

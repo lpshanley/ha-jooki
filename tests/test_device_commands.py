@@ -98,3 +98,70 @@ def test_play_playlist_keeps_the_track_index(device_commands, device_config, tra
     topic, actual = device_commands.play_playlist(_topics(device_config), "user_1", track_index)
     assert topic == "/j/web/input/PLAYLIST_PLAY"
     assert actual == payload
+
+
+def test_nfc_tag_payload_is_passed_through(device_commands, device_config):
+    """An already-built tag string is not JSON-encoded."""
+    raw = "04E8A76AE74C80,211"
+    topic, payload = device_commands.nfc_tag(_topics(device_config), raw)
+    assert topic == "/j/nfc/input/tag"
+    assert payload == raw
+
+
+@pytest.mark.parametrize(
+    ("enable", "payload"),
+    [
+        (True, '{"enable": true}'),
+        (False, '{"enable": false}'),
+    ],
+)
+def test_toy_safe_enable_is_a_json_bool(device_commands, device_config, enable, payload):
+    """Toy Safe publishes ``enable`` true or false."""
+    topic, actual = device_commands.set_toy_safe(_topics(device_config), enable)
+    assert topic == "/j/web/input/SET_TOY_SAFE"
+    assert actual == payload
+
+
+def test_locale_sends_the_language_code(device_commands, device_config):
+    """Locale publishes the code the select entity already mapped."""
+    topic, payload = device_commands.set_locale(_topics(device_config), "fr")
+    assert topic == "/j/web/input/SWITCH_LOCALE"
+    assert payload == '{"locale": "fr"}'
+
+
+def test_led_raw_formats_rgb(device_commands, device_config):
+    """A color is ``ALL,r,g,b`` on set_raw."""
+    topic, payload = device_commands.set_led_raw(_topics(device_config), 255, 128, 0)
+    assert topic == "/j/led/output/set_raw"
+    assert payload == "ALL,255,128,0"
+
+
+def test_led_off_clears_the_ring(device_commands, device_config):
+    """Off is ``ALL,0,0,0`` on set_raw, the same topic as a color."""
+    topic, payload = device_commands.turn_off_led(_topics(device_config))
+    assert topic == "/j/led/output/set_raw"
+    assert payload == "ALL,0,0,0"
+
+
+def test_pulse_led_passes_the_wire_string_through(device_commands, device_config):
+    """Pulse publishes the looked-up wire string on pulse_raw."""
+    raw = "ALL,255,0,0,3,500,1.0"
+    topic, payload = device_commands.pulse_led(_topics(device_config), raw)
+    assert topic == "/j/led/output/pulse_raw"
+    assert payload == raw
+
+
+@pytest.mark.parametrize("effect", ["BAT_INC", "BAT_DEC"])
+def test_charge_effect_passes_the_wire_token_through(device_commands, device_config, effect):
+    """Charge state publishes ``BAT_INC`` or ``BAT_DEC`` unchanged."""
+    topic, payload = device_commands.set_charge_effect(_topics(device_config), effect)
+    assert topic == "/j/led/output/charge_state"
+    assert payload == effect
+
+
+@pytest.mark.parametrize("delta_s", [30, -15])
+def test_skip_seconds_sends_delta_s(device_commands, device_config, delta_s):
+    """Skip sends ``delta_s`` as a JSON number on SKIP_SEC."""
+    topic, payload = device_commands.skip_seconds(_topics(device_config), delta_s)
+    assert topic == "/j/web/input/SKIP_SEC"
+    assert payload == f'{{"delta_s": {delta_s}}}'
