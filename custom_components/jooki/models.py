@@ -94,6 +94,21 @@ def retained_locale(selected: str | None, device_locale: str | None) -> str | No
     return selected
 
 
+def retained_toy_safe(selected: bool, device_data: object) -> bool:
+    """Keep commanded Toy Safe when a device slice omits the key.
+
+    SET_TOY_SAFE is not echoed, same as SWITCH_LOCALE (see
+    ``retained_locale``). This is the exception to slice replacement:
+    ``_rebuild_device`` uses ``toy_safe`` when the device slice contains
+    that key, and an explicit false still wins. When the key is absent,
+    including when the device slice is not a dict, the previous typed
+    value stays.
+    """
+    if isinstance(device_data, dict) and "toy_safe" in device_data:
+        return bool(device_data["toy_safe"])
+    return selected
+
+
 # ---------------------------------------------------------------------------
 # V2 fine-grained state dataclasses
 # ---------------------------------------------------------------------------
@@ -400,6 +415,20 @@ class JookiState:
         self._rebuild_facade()
         return True
 
+    def note_toy_safe(self, enabled: bool) -> None:
+        """Record commanded Toy Safe on raw device state and the typed field.
+
+        The player does not echo SET_TOY_SAFE. ``raw["device"]`` is a dict
+        afterwards, and other device fields stay in place. A later device
+        slice that omits the key keeps this value; see ``retained_toy_safe``.
+        """
+        device_data = self.raw.get("device")
+        if not isinstance(device_data, dict):
+            device_data = {}
+            self.raw["device"] = device_data
+        device_data["toy_safe"] = enabled
+        self.device.toy_safe = enabled
+
     def _ensure_audio_playback(self) -> dict:
         """Return raw ``audio.playback``, creating the objects if needed."""
         audio = self.raw.get("audio")
@@ -540,7 +569,12 @@ class JookiState:
     # -- Device ---------------------------------------------------------
 
     def _rebuild_device(self) -> None:
+        """Rebuild device info, retaining Toy Safe when the slice omits it.
+
+        See ``retained_toy_safe``. An explicit false in the slice still wins.
+        """
         device_data = self.raw.get("device")
+        toy_safe = retained_toy_safe(self.device.toy_safe, device_data)
         if isinstance(device_data, dict):
             self.device = JookiDeviceInfo(
                 firmware=device_data.get("firmware"),
@@ -551,10 +585,10 @@ class JookiState:
                 wifi_mac=device_data.get("wifi_mac"),
                 disk_usage=device_data.get("diskUsage"),
                 flags=device_data.get("flags"),
-                toy_safe=bool(device_data.get("toy_safe", False)),
+                toy_safe=toy_safe,
             )
         else:
-            self.device = JookiDeviceInfo()
+            self.device = JookiDeviceInfo(toy_safe=toy_safe)
 
     # -- Database (playlists / tokens / tracks) ---------------------------
 
