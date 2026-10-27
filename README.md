@@ -16,7 +16,8 @@ A custom [Home Assistant](https://www.home-assistant.io/) integration for the [J
 ## Prerequisites
 
 - Jooki device on the same local network as your Home Assistant instance
-- Static IP address assigned to the Jooki (recommended)
+- Home Assistant OS and other installs that see DHCP offer the device automatically. The stored host is updated when the lease changes.
+- Installs that cannot see DHCP, such as bridged containers, need the host entered by hand
 
 ## Installation
 
@@ -36,10 +37,14 @@ A custom [Home Assistant](https://www.home-assistant.io/) integration for the [J
 
 ## Configuration
 
+Home Assistant OS and other installs that see DHCP offer the Jooki when it joins the network. Confirm the hostname, model, and IP address. The stored host is updated when the player's lease changes.
+
+Installs that cannot see DHCP, such as a bridged container, use manual setup:
+
 1. Go to **Settings > Devices & Services > Add Integration**
 2. Search for **Jooki**
-3. Enter the device's IP address, MQTT port (default 1883), a friendly name, and select the device model (J1000 or J2000)
-4. The integration will test the MQTT connection before completing setup
+3. Enter the device's host, MQTT port (default 1883), a friendly name, and select the device model (J1000 or J2000)
+4. The integration tests the MQTT connection before completing setup
 
 ## Entities
 

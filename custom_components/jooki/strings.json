@@ -16,6 +16,10 @@
           "name": "Friendly name for this Jooki device",
           "device_version": "Select the hardware model of your Jooki player (J1000 = original, J2000 = second generation)"
         }
+      },
+      "discovery_confirm": {
+        "title": "Discovered Jooki",
+        "description": "{hostname} ({model}) was found at {ip}."
       }
     },
     "error": {
