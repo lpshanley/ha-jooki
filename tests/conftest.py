@@ -39,6 +39,11 @@ def load_device_config():
     return _load("jooki_device_config", "device_config.py")
 
 
+def load_identity():
+    """Import ``identity.py`` by path."""
+    return _load("jooki_identity", "identity.py")
+
+
 @pytest.fixture(scope="session")
 def models():
     """Session-wide models module."""
@@ -55,3 +60,9 @@ def device_commands():
 def device_config():
     """Session-wide topic tables."""
     return load_device_config()
+
+
+@pytest.fixture(scope="session")
+def identity():
+    """Session-wide hostname identity helpers."""
+    return load_identity()
