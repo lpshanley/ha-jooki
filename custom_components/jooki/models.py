@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 
@@ -44,6 +45,42 @@ def _replace_slices(base: dict, update: dict) -> None:
                 current[subkey] = subvalue
             continue
         base[key] = value
+
+
+# Firmware on_tag: msg:match("^(%x+),(%x+)$") and string.len(tagId) == 14.
+_NFC_TAG_ID = re.compile(r"^[0-9A-Fa-f]{14}$")
+_NFC_STAR_CODE = re.compile(r"^[0-9A-Fa-f]+$")
+
+
+def nfc_tag_payload(tag_id: str | None, star_code: str | None) -> str | None:
+    """Return ``tagId,starHex`` for ``/j/nfc/input/tag``, or None.
+
+    A star name such as ``Jooki.Dragon`` is not a wire star code.
+    """
+    if not isinstance(tag_id, str) or not isinstance(star_code, str):
+        return None
+    if _NFC_TAG_ID.fullmatch(tag_id) is None:
+        return None
+    if _NFC_STAR_CODE.fullmatch(star_code) is None:
+        return None
+    return f"{tag_id},{star_code}"
+
+
+def playlist_id_for_figurine(
+    playlists: dict[str, JookiPlaylist], identifier: str
+) -> str | None:
+    """Resolve a playlist by ``tagId``, or by ``star`` when it has no tag.
+
+    Matches Catalog.lua ``star2playlist``: a star link is only used when
+    the playlist is not bound to a specific tag.
+    """
+    for playlist_id, playlist in playlists.items():
+        if playlist.tag_id == identifier:
+            return playlist_id
+    for playlist_id, playlist in playlists.items():
+        if not playlist.tag_id and playlist.star == identifier:
+            return playlist_id
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -142,6 +179,7 @@ class JookiPlaylist:
     title: str = ""
     image: str | None = None
     tag_id: str | None = None
+    star: str | None = None
     audiobook: bool = False
     tracks: list[str] = field(default_factory=list)
     # Spotify-linked playlists
@@ -430,6 +468,7 @@ class JookiState:
                 title=pdata.get("title", ""),
                 image=pdata.get("image"),
                 tag_id=pdata.get("tagId"),
+                star=pdata.get("star"),
                 audiobook=bool(pdata.get("audiobook", False)),
                 tracks=pdata.get("tracks") or [],
                 spotify_source=spotify_data.get("source"),

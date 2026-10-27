@@ -31,7 +31,7 @@ from .const import (
     MEDIA_TYPE_TRACK,
     SIGNAL_STATE_UPDATED,
 )
-from .models import JookiPlaylist
+from .models import JookiPlaylist, nfc_tag_payload, playlist_id_for_figurine
 from .mqtt_client import JookiMqttClient
 
 _PLAYBACK_STATE_MAP = {
@@ -329,26 +329,25 @@ class JookiMediaPlayer(MediaPlayerEntity):
         media_id: str,
         **kwargs: Any,
     ) -> None:
-        """Play a playlist or figurine.
+        """Play a playlist, track, or figurine.
 
-        Local playlists use PLAYLIST_PLAY (trackIndex is 1-based).
-        Spotify-linked playlists use NFC simulation (triggers play_preset).
+        Playlists use PLAYLIST_PLAY. A figurine resolves by tag id or star
+        first; NFC spoofing is only used for a valid tag and hex star code.
         """
         db = self._client.state.db
 
         if media_type == MEDIA_TYPE_FIGURINE:
-            # Resolve figurine → playlist by matching tag_id
-            playlist_id = self._find_playlist_for_token(media_id)
+            playlist_id = playlist_id_for_figurine(db.playlists, media_id)
             if playlist_id:
                 await self._play_playlist(playlist_id)
                 return
-            # Fallback: simulate NFC placement if no playlist found
             token = db.tokens.get(media_id)
-            if not token:
+            payload = nfc_tag_payload(media_id, token.star_id if token else None)
+            if payload is None:
                 raise HomeAssistantError(
-                    f"Figurine with tag ID '{media_id}' not found"
+                    f"Figurine '{media_id}' has no matching playlist and is not a valid NFC tag"
                 )
-            await self._simulate_nfc(media_id, token.star_id)
+            await self._client.async_publish(self._cfg.topic_nfc_tag, payload)
             return
 
         if media_type == MEDIA_TYPE_PLAYLIST:
@@ -395,20 +394,6 @@ class JookiMediaPlayer(MediaPlayerEntity):
                 await self._play_playlist(pid, track_index=index)
                 return
         raise HomeAssistantError(f"Track '{track_id}' not found in any playlist")
-
-    async def _simulate_nfc(self, tag_id: str, star_id: str | None) -> None:
-        """Simulate NFC figurine placement."""
-        await self._client.async_publish(
-            self._cfg.topic_nfc_tag,
-            f"{tag_id},{star_id or '0'}",
-        )
-
-    def _find_playlist_for_token(self, tag_id: str) -> str | None:
-        """Find the playlist bound to a given NFC tag_id."""
-        for pid, playlist in self._client.state.db.playlists.items():
-            if playlist.tag_id == tag_id:
-                return pid
-        return None
 
     async def async_media_seek(self, position: float) -> None:
         """Seek to a position in the current track (seconds)."""
