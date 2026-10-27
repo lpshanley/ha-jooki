@@ -36,6 +36,18 @@ def test_normalize_hostname(identity, raw, expected):
     assert identity.normalize_hostname(raw) == expected
 
 
+def test_device_id_is_read_before_hostname(identity):
+    """A valid device id wins. An invalid one falls through to hostname."""
+    assert (
+        identity.normalize_device_identity("jooki2-041290", "jooki-ab12")
+        == "jooki2-041290"
+    )
+    assert identity.normalize_device_identity("dev1", "jooki-ab12.local") == "jooki-ab12"
+    assert identity.normalize_device_identity("dev1", "jooki") is None
+    assert identity.normalize_device_identity(None, None) is None
+    assert identity.normalize_device_identity("", "jooki2-041290") == "jooki2-041290"
+
+
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [

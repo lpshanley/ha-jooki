@@ -11,10 +11,18 @@ from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv, device_registry as dr
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
-from .const import CONF_DEVICE_VERSION, DEVICE_VERSION_V1, DOMAIN, PLATFORMS
+from .const import (
+    CONF_DEVICE_VERSION,
+    DEVICE_VERSION_V1,
+    DOMAIN,
+    PLATFORMS,
+    SIGNAL_STATE_UPDATED,
+)
 from .device_commands import JookiDevice
 from .device_config import get_device_config
+from .identity import normalize_device_identity
 from .mqtt_client import JookiMqttClient
 
 type JookiConfigEntry = ConfigEntry[JookiDevice]
@@ -47,13 +55,47 @@ async def async_setup_entry(hass: HomeAssistant, entry: JookiConfigEntry) -> boo
         entry_id=entry.entry_id,
         device_config=device_config,
     )
-    await client.async_start()
-
     entry.runtime_data = client
+    _watch_device_identity(hass, entry)
+    await client.async_start()
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     _register_services(hass)
     return True
+
+
+def _watch_device_identity(hass: HomeAssistant, entry: JookiConfigEntry) -> None:
+    """Set the config entry unique id from the first valid device id.
+
+    Empty connect state and slices without a Jooki id are ignored. The
+    listener is removed once an id normalizes, so a later slice that clears
+    device.id leaves the unique id in place. The update does not reload.
+    """
+    signal = SIGNAL_STATE_UPDATED.format(entry.entry_id)
+    removed = False
+
+    def _remove() -> None:
+        nonlocal removed
+        if removed:
+            return
+        removed = True
+        remove_listener()
+
+    def _on_state() -> None:
+        device = entry.runtime_data.state.device
+        hostname = normalize_device_identity(device.device_id, device.hostname)
+        if hostname is None:
+            return
+        _remove()
+        if entry.unique_id == hostname:
+            return
+        owner = hass.config_entries.async_entry_for_domain_unique_id(DOMAIN, hostname)
+        if owner is not None and owner.entry_id != entry.entry_id:
+            return
+        hass.config_entries.async_update_entry(entry, unique_id=hostname)
+
+    remove_listener = async_dispatcher_connect(hass, signal, _on_state)
+    entry.async_on_unload(_remove)
 
 
 def _client_for_device(hass: HomeAssistant, device_id: str) -> JookiDevice:

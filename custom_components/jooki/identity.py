@@ -35,6 +35,13 @@ def normalize_hostname(hostname: str | None) -> str | None:
     return None
 
 
+def normalize_device_identity(
+    device_id: str | None, hostname: str | None
+) -> str | None:
+    """Return the first of device id, then hostname, that is a Jooki id."""
+    return normalize_hostname(device_id) or normalize_hostname(hostname)
+
+
 def device_version_for_hostname(hostname: str | None) -> str | None:
     """Return ``j2000`` for ``jooki2-`` and ``j1000`` for ``jooki-``.
 
