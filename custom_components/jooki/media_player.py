@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.components.media_player import (
@@ -28,6 +28,7 @@ from .const import (
     MEDIA_TYPE_FIGURINE,
     MEDIA_TYPE_PLAYLIST,
     MEDIA_TYPE_TRACK,
+    SIGNAL_POSITION_UPDATED,
     SIGNAL_STATE_UPDATED,
 )
 from .device_commands import JookiDevice
@@ -49,6 +50,11 @@ _HA_TO_JOOKI_REPEAT = {
     RepeatMode.ALL: 1,
     RepeatMode.ONE: 2,
 }
+
+# A seek is a jump from the previous tick, not from the last written sample.
+# Ordinary playback would otherwise cross 2000 ms and look like a seek.
+_POSITION_SEEK_THRESHOLD_MS = 2000
+_POSITION_WRITE_INTERVAL = timedelta(seconds=10)
 
 
 async def async_setup_entry(
@@ -91,27 +97,70 @@ class JookiMediaPlayer(MediaPlayerEntity):
             model=client.model_name,
         )
         self._signal = SIGNAL_STATE_UPDATED.format(entry.entry_id)
+        self._position_signal = SIGNAL_POSITION_UPDATED.format(entry.entry_id)
         self._device_info_enriched = False
         self._position_updated_at: datetime | None = None
         self._last_position_ms: int | None = None
+        self._last_seen_position_ms: int | None = None
 
     async def async_added_to_hass(self) -> None:
-        """Subscribe to state updates."""
+        """Subscribe to state and position updates."""
         self.async_on_remove(
             async_dispatcher_connect(self.hass, self._signal, self._handle_update)
+        )
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass, self._position_signal, self._handle_position
+            )
         )
 
     @callback
     def _handle_update(self) -> None:
-        """Handle a state update from the MQTT client."""
+        """Write transport, metadata, volume, and web playback updates.
+
+        Position-only GStreamer ticks use ``_handle_position`` instead.
+        """
         self._enrich_device_info()
-        # Only update the timestamp when the position value actually changes,
-        # to avoid resetting HA's interpolation on redundant updates.
+        # Anchor interpolation when this write publishes a new position.
+        # Leave the timestamp alone when the position is unchanged so a
+        # volume or metadata write does not restart the seek bar.
+        # A cleared position drops the anchor so the next track's first
+        # tick is written instead of looking like a small step.
         pos = self._client.state.playback.position_ms
-        if pos is not None and pos != self._last_position_ms:
+        if pos is None:
+            self._last_position_ms = None
+            self._last_seen_position_ms = None
+            self._position_updated_at = None
+        elif pos != self._last_position_ms:
             self._last_position_ms = pos
+            self._last_seen_position_ms = pos
             self._position_updated_at = utcnow()
         self.async_write_ha_state()
+
+    @callback
+    def _handle_position(self) -> None:
+        """Write a seek immediately, and otherwise at most every 10 seconds."""
+        pos = self._client.state.playback.position_ms
+        if pos is None:
+            return
+        previous = self._last_seen_position_ms
+        self._last_seen_position_ms = pos
+        if not self._position_sample_due(previous, pos):
+            return
+        self._last_position_ms = pos
+        self._position_updated_at = utcnow()
+        self.async_write_ha_state()
+
+    def _position_sample_due(self, previous: int | None, pos: int) -> bool:
+        """Return True for a seek, the first sample, or a 10 second sample."""
+        if previous is None:
+            return True
+        if abs(pos - previous) >= _POSITION_SEEK_THRESHOLD_MS:
+            return True
+        updated_at = self._position_updated_at
+        if updated_at is None:
+            return True
+        return utcnow() - updated_at >= _POSITION_WRITE_INTERVAL
 
     def _enrich_device_info(self) -> None:
         """Update DeviceInfo with firmware/MAC from device state (once)."""
@@ -208,11 +257,11 @@ class JookiMediaPlayer(MediaPlayerEntity):
 
     @property
     def media_position_updated_at(self) -> datetime | None:
-        """Return when the position was last updated.
+        """Return when the last written position sample was taken.
 
-        HA uses this to interpolate the seek bar between updates.
-        Stored on each state update rather than computed on read so the
-        timestamp is stable between property accesses.
+        Home Assistant interpolates the seek bar from this timestamp.
+        Position ticks change it only when that tick is written. A state
+        write changes it when the published position changes.
         """
         return self._position_updated_at
 

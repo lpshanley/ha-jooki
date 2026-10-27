@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Callable
 from typing import Any
 
 import paho.mqtt.client as mqtt
@@ -12,15 +13,16 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from . import device_commands
+from .device_commands import JookiDevice
 from .const import (
     DEVICE_VERSION_V2,
     MAX_VOLUME,
     SIGNAL_BUTTON_EVENT,
     SIGNAL_NFC_EVENT,
+    SIGNAL_POSITION_UPDATED,
     SIGNAL_STATE_UPDATED,
     SIGNAL_VOLUME_EVENT,
 )
-from .device_commands import JookiDevice
 from .device_config import JookiDeviceConfig
 from .models import JookiState
 
@@ -46,6 +48,7 @@ class JookiMqttClient(JookiDevice):
         self._device_config = device_config
         self._state = JookiState()
         self._signal = SIGNAL_STATE_UPDATED.format(entry_id)
+        self._signal_position = SIGNAL_POSITION_UPDATED.format(entry_id)
         self._signal_nfc = SIGNAL_NFC_EVENT.format(entry_id)
         self._signal_button = SIGNAL_BUTTON_EVENT.format(entry_id)
         self._signal_volume = SIGNAL_VOLUME_EVENT.format(entry_id)
@@ -210,6 +213,16 @@ class JookiMqttClient(JookiDevice):
         topic, payload = device_commands.skip_seconds(self._device_config, delta_s)
         await self._async_publish(topic, payload)
 
+    def _schedule(self, callback: Callable[..., None], *args: Any) -> None:
+        """Queue ``callback`` on the Home Assistant loop, in arrival order.
+
+        ``RuntimeError`` means the loop is already closed during unload.
+        """
+        try:
+            self._hass.loop.call_soon_threadsafe(callback, *args)
+        except RuntimeError:
+            return
+
     def _on_connect(
         self,
         client: mqtt.Client,
@@ -224,9 +237,11 @@ class JookiMqttClient(JookiDevice):
             return
 
         _LOGGER.debug("Connected to Jooki at %s:%s", self._host, self._port)
-        cfg = self._device_config
+        # Queue the reset before subscribe and the handshake. A fast
+        # GET_STATE reply is then applied to the fresh state, not wiped by it.
+        self._schedule(self._on_loop_connected)
 
-        # Subscribe to all topics we care about
+        cfg = self._device_config
         client.subscribe(cfg.topic_state)
         client.subscribe(cfg.topic_error)
         client.subscribe(cfg.topic_nfc_tag)
@@ -235,8 +250,6 @@ class JookiMqttClient(JookiDevice):
         client.subscribe(cfg.topic_gpio_prev)
         client.subscribe(cfg.topic_gpio_circle)
         client.subscribe(cfg.topic_gpio_vol_set)
-
-        # Audio playback events
         client.subscribe(cfg.topic_audio_position)
         client.subscribe(cfg.topic_audio_playing)
         client.subscribe(cfg.topic_audio_paused)
@@ -247,13 +260,13 @@ class JookiMqttClient(JookiDevice):
         if self.is_v2 and cfg.topic_gpio_hp_plugged:
             client.subscribe(cfg.topic_gpio_hp_plugged)
 
-        # Reset state for accumulation
-        self._state = JookiState(available=True)
-        self._dispatch_state()
-
-        # Request full state dump
         self._send_connect_handshake()
         self._request_full_state()
+
+    def _on_loop_connected(self) -> None:
+        """Mark the device available. Runs before any reply queued at connect."""
+        self._state = JookiState(available=True)
+        self._dispatch_state()
 
     def _send_connect_handshake(self) -> None:
         """Send the CONNECT handshake (runs on paho thread)."""
@@ -282,28 +295,35 @@ class JookiMqttClient(JookiDevice):
         _LOGGER.debug(
             "Disconnected from Jooki at %s:%s (rc=%s)", self._host, self._port, rc
         )
+        self._schedule(self._on_loop_disconnected)
+
+    def _on_loop_disconnected(self) -> None:
+        """Mark the device unavailable."""
         self._state = JookiState(available=False)
         self._dispatch_state()
 
     def _on_message(
         self, client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage
     ) -> None:
-        """Handle incoming MQTT message — route by topic."""
-        topic = msg.topic
+        """Copy the message onto the Home Assistant loop."""
+        self._schedule(self._on_loop_message, msg.topic, bytes(msg.payload))
+
+    def _on_loop_message(self, topic: str, payload: bytes) -> None:
+        """Parse one copied message and update state. Runs in FIFO order."""
         cfg = self._device_config
 
         if topic == cfg.topic_state:
-            self._handle_state_message(msg)
+            self._handle_state_message(payload)
         elif topic == cfg.topic_nfc_tag:
-            self._handle_nfc_tag(msg)
+            self._handle_nfc_tag(payload)
         elif topic == cfg.topic_nfc_tag_removed:
             self._handle_nfc_tag_removed()
         elif topic in (cfg.topic_gpio_next, cfg.topic_gpio_prev, cfg.topic_gpio_circle):
-            self._handle_gpio_button(topic, msg)
+            self._handle_gpio_button(topic, payload)
         elif topic == cfg.topic_gpio_vol_set:
-            self._handle_gpio_vol_set(msg)
+            self._handle_gpio_vol_set(payload)
         elif cfg.topic_gpio_hp_plugged and topic == cfg.topic_gpio_hp_plugged:
-            self._handle_hp_plugged(msg)
+            self._handle_hp_plugged(payload)
         elif topic in (
             cfg.topic_audio_position,
             cfg.topic_audio_playing,
@@ -312,33 +332,32 @@ class JookiMqttClient(JookiDevice):
             cfg.topic_audio_error,
             cfg.topic_audio_ended,
         ):
-            self._handle_audio_event(topic, msg)
+            self._handle_audio_event(topic, payload)
         elif topic == cfg.topic_error:
-            self._handle_error(msg)
+            self._handle_error(payload)
 
-    def _handle_state_message(self, msg: mqtt.MQTTMessage) -> None:
+    def _handle_state_message(self, payload: bytes) -> None:
         """Handle a state update from /j/web/output/state."""
         try:
-            payload = json.loads(msg.payload)
+            parsed = json.loads(payload)
         except (json.JSONDecodeError, UnicodeDecodeError):
-            _LOGGER.warning("Invalid JSON from Jooki: %s", msg.payload[:200])
+            _LOGGER.warning("Invalid JSON from Jooki: %s", payload[:200])
             return
 
-        self._state.apply_slices(payload)
+        self._state.apply_slices(parsed)
         self._dispatch_state()
 
-    def _handle_nfc_tag(self, msg: mqtt.MQTTMessage) -> None:
+    def _handle_nfc_tag(self, payload: bytes) -> None:
         """Handle NFC figurine placed event."""
         try:
-            parts = msg.payload.decode().split(",")
+            parts = payload.decode().split(",")
             tag_id = parts[0] if len(parts) >= 1 else ""
             star_id = parts[1] if len(parts) >= 2 else ""
         except (UnicodeDecodeError, IndexError):
-            _LOGGER.warning("Invalid NFC tag payload: %s", msg.payload[:100])
+            _LOGGER.warning("Invalid NFC tag payload: %s", payload[:100])
             return
 
-        self._hass.loop.call_soon_threadsafe(
-            async_dispatcher_send,
+        async_dispatcher_send(
             self._hass,
             self._signal_nfc,
             "figurine_placed",
@@ -347,15 +366,14 @@ class JookiMqttClient(JookiDevice):
 
     def _handle_nfc_tag_removed(self) -> None:
         """Handle NFC figurine removed event."""
-        self._hass.loop.call_soon_threadsafe(
-            async_dispatcher_send,
+        async_dispatcher_send(
             self._hass,
             self._signal_nfc,
             "figurine_removed",
             {},
         )
 
-    def _handle_gpio_button(self, topic: str, msg: mqtt.MQTTMessage) -> None:
+    def _handle_gpio_button(self, topic: str, payload: bytes) -> None:
         """Handle a GPIO button press/release event."""
         cfg = self._device_config
         button_map = {
@@ -366,52 +384,50 @@ class JookiMqttClient(JookiDevice):
         button_name = button_map.get(topic, "unknown")
 
         try:
-            value = msg.payload.decode().strip()
+            value = payload.decode().strip()
             event_type = "pressed" if value == "1" else "released"
         except UnicodeDecodeError:
             return
 
-        self._hass.loop.call_soon_threadsafe(
-            async_dispatcher_send,
+        async_dispatcher_send(
             self._hass,
             self._signal_button,
             button_name,
             event_type,
         )
 
-    def _handle_hp_plugged(self, msg: mqtt.MQTTMessage) -> None:
+    def _handle_hp_plugged(self, payload: bytes) -> None:
         """Track the J2000 headphone jack (payload ``1`` or ``0``)."""
         try:
-            value = msg.payload.decode().strip()
+            value = payload.decode().strip()
         except UnicodeDecodeError:
             return
         if self._state.apply_hp_plugged(value):
             self._dispatch_state()
 
-    def _handle_gpio_vol_set(self, msg: mqtt.MQTTMessage) -> None:
+    def _handle_gpio_vol_set(self, payload: bytes) -> None:
         """Handle a physical volume knob change event."""
         try:
-            payload = json.loads(msg.payload)
-            vol = payload.get("vol", "0")
+            parsed = json.loads(payload)
+            vol = parsed.get("vol", "0")
         except (json.JSONDecodeError, UnicodeDecodeError):
-            _LOGGER.warning("Invalid vol_set payload: %s", msg.payload[:200])
+            _LOGGER.warning("Invalid vol_set payload: %s", payload[:200])
             return
 
-        self._hass.loop.call_soon_threadsafe(
-            async_dispatcher_send,
+        async_dispatcher_send(
             self._hass,
             self._signal_volume,
             str(vol),
         )
 
-    def _handle_audio_event(self, topic: str, msg: mqtt.MQTTMessage) -> None:
+    def _handle_audio_event(self, topic: str, payload: bytes) -> None:
         """Apply GStreamer audio events into accumulated playback state."""
         cfg = self._device_config
 
         if topic == cfg.topic_audio_error:
             try:
-                payload = json.loads(msg.payload)
-                _LOGGER.warning("Jooki audio error: %s", payload)
+                parsed = json.loads(payload)
+                _LOGGER.warning("Jooki audio error: %s", parsed)
             except (json.JSONDecodeError, UnicodeDecodeError):
                 _LOGGER.warning("Jooki audio error (unparseable payload)")
             return
@@ -426,30 +442,35 @@ class JookiMqttClient(JookiDevice):
         if event is None:
             return
 
-        payload = None
+        parsed: dict | None = None
         if event == "position":
             try:
-                payload = json.loads(msg.payload)
+                parsed = json.loads(payload)
             except (json.JSONDecodeError, UnicodeDecodeError):
                 _LOGGER.warning(
-                    "Invalid audio position payload: %s", msg.payload[:200]
+                    "Invalid audio position payload: %s", payload[:200]
                 )
                 return
 
-        if self._state.apply_gstreamer_audio(event, payload):
+        update = self._state.apply_gstreamer_audio(event, parsed)
+        if update == "position":
+            self._dispatch_position()
+        elif update == "transport":
             self._dispatch_state()
 
-    def _handle_error(self, msg: mqtt.MQTTMessage) -> None:
+    def _handle_error(self, payload: bytes) -> None:
         """Handle an error/info message from the device."""
         try:
-            payload = json.loads(msg.payload)
-            error_msg = payload.get("msg", "Unknown error")
+            parsed = json.loads(payload)
+            error_msg = parsed.get("msg", "Unknown error")
             _LOGGER.info("Jooki device message: %s", error_msg)
         except (json.JSONDecodeError, UnicodeDecodeError):
-            _LOGGER.warning("Invalid error payload from Jooki: %s", msg.payload[:200])
+            _LOGGER.warning("Invalid error payload from Jooki: %s", payload[:200])
 
     def _dispatch_state(self) -> None:
-        """Send a state update signal to the HA event loop."""
-        self._hass.loop.call_soon_threadsafe(
-            async_dispatcher_send, self._hass, self._signal
-        )
+        """Notify entities subscribed to device state. Runs on the HA loop."""
+        async_dispatcher_send(self._hass, self._signal)
+
+    def _dispatch_position(self) -> None:
+        """Notify the media player of a playback position tick."""
+        async_dispatcher_send(self._hass, self._signal_position)

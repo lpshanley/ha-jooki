@@ -23,6 +23,7 @@ PLATFORMS: list[Platform] = [
 
 # Dispatcher signals (formatted with entry_id)
 SIGNAL_STATE_UPDATED = f"{DOMAIN}_state_updated_{{}}"
+SIGNAL_POSITION_UPDATED = f"{DOMAIN}_position_updated_{{}}"
 SIGNAL_NFC_EVENT = f"{DOMAIN}_nfc_event_{{}}"
 SIGNAL_BUTTON_EVENT = f"{DOMAIN}_button_event_{{}}"
 SIGNAL_VOLUME_EVENT = f"{DOMAIN}_volume_event_{{}}"
