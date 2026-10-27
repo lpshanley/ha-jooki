@@ -273,7 +273,7 @@ class JookiState:
 
     J1000 and J2000 publish the same partial slices. ``apply_slices()``
     replaces each slice whose key is present, leaves sibling slices in
-    ``raw``, and rebuilds the typed fields from that accumulated raw state.
+    ``raw``, and rebuilds only the typed fields for keys in that payload.
     """
 
     # -- Facade fields (entity platforms read these) --
@@ -300,18 +300,108 @@ class JookiState:
         return state
 
     def apply_slices(self, payload: dict) -> None:
-        """Replace each slice present in *payload* and rebuild typed state."""
+        """Replace each slice present in *payload* and rebuild those slices.
+
+        Sets ``available``. Only top-level keys in *payload* are rebuilt.
+        ``audio`` rebuilds audio and the playback facade. ``power``,
+        ``wifi``, ``nfc``, ``spotify``, ``device``, and ``db`` each rebuild
+        only themselves, so a wifi update does not rebuild the catalog.
+        """
         _replace_slices(self.raw, payload)
         self.available = True
-        self._rebuild_from_raw()
+        if "power" in payload:
+            self._rebuild_power()
+        if _AUDIO_KEY in payload:
+            self._rebuild_audio()
+            self._rebuild_facade()
+        if "wifi" in payload:
+            self._rebuild_wifi()
+        if "nfc" in payload:
+            self._rebuild_nfc()
+        if "spotify" in payload:
+            self._rebuild_spotify()
+        if "device" in payload:
+            self._rebuild_device()
+        if "db" in payload:
+            self._rebuild_db()
 
-    def apply_gstreamer_audio(self, event: str, payload: dict | None = None) -> bool:
+    def apply_gstreamer_audio(
+        self, event: str, payload: dict | None = None
+    ) -> str | None:
         """Record a local GStreamer audio event on ``audio.playback``.
 
         ``/j/audio/input/position`` payloads are ``{"id": N, "pos": N}`` with
-        ``pos`` in milliseconds. Transport events set the playback state.
-        Returns False when the event does not change state.
+        ``pos`` in milliseconds. The same integer position returns None and
+        does not rebuild. A new position writes ``audio.playback.position_ms``
+        and updates ``playback_info.position_ms`` and the facade
+        ``playback.position_ms`` in place, then returns ``"position"``.
+        ``playing``, ``paused``, ``stopped``, and ``ended`` update raw
+        playback, rebuild audio and the facade only, and return
+        ``"transport"``. ``ended`` clears ``position_ms``. Invalid payloads
+        return None.
         """
+        if event == "position":
+            if not isinstance(payload, dict) or "pos" not in payload:
+                return None
+            try:
+                pos = int(payload["pos"])
+            except (TypeError, ValueError):
+                return None
+            audio = self.raw.get("audio")
+            playback = audio.get("playback") if isinstance(audio, dict) else None
+            stored = (
+                playback.get("position_ms") if isinstance(playback, dict) else None
+            )
+            # ``bool`` is an ``int`` subclass; a jack-like flag is not a position.
+            if not isinstance(stored, bool) and stored == pos:
+                return None
+            playback_raw = self._ensure_audio_playback()
+            playback_raw["position_ms"] = pos
+            self.playback_info.position_ms = pos
+            self.playback.position_ms = pos
+            return "position"
+
+        if event in {"playing", "paused", "stopped", "ended"}:
+            playback_raw = self._ensure_audio_playback()
+            playback_raw["state"] = event
+            if event == "ended":
+                playback_raw["position_ms"] = None
+            self._rebuild_audio()
+            self._rebuild_facade()
+            return "transport"
+
+        return None
+
+    def apply_hp_plugged(self, payload: str) -> bool:
+        """Record a J2000 headphone jack event on ``audio.config``.
+
+        ``/j/gpio/input/hp_plugged`` is ``"1"`` when plugged in and ``"0"``
+        when removed. The same stored value, and any other payload, returns
+        False and does not rebuild. A change writes raw and rebuilds audio
+        and the facade only.
+        """
+        value = str(payload).strip()
+        if value not in {"0", "1"}:
+            return False
+        enabled = value == "1"
+        audio = self.raw.get("audio")
+        config = audio.get("config") if isinstance(audio, dict) else None
+        if isinstance(config, dict) and config.get("headphones_en") == enabled:
+            return False
+
+        if not isinstance(audio, dict):
+            audio = {}
+            self.raw["audio"] = audio
+        if not isinstance(config, dict):
+            config = {}
+            audio["config"] = config
+        config["headphones_en"] = enabled
+        self._rebuild_audio()
+        self._rebuild_facade()
+        return True
+
+    def _ensure_audio_playback(self) -> dict:
+        """Return raw ``audio.playback``, creating the objects if needed."""
         audio = self.raw.get("audio")
         if not isinstance(audio, dict):
             audio = {}
@@ -320,60 +410,12 @@ class JookiState:
         if not isinstance(playback, dict):
             playback = {}
             audio["playback"] = playback
-
-        if event == "position":
-            if not isinstance(payload, dict) or "pos" not in payload:
-                return False
-            try:
-                playback["position_ms"] = int(payload["pos"])
-            except (TypeError, ValueError):
-                return False
-        elif event in {"playing", "paused", "stopped", "ended"}:
-            playback["state"] = event
-            if event == "ended":
-                playback["position_ms"] = None
-        else:
-            return False
-
-        self._rebuild_from_raw()
-        return True
-
-    def apply_hp_plugged(self, payload: str) -> bool:
-        """Record a J2000 headphone jack event on ``audio.config``.
-
-        ``/j/gpio/input/hp_plugged`` is ``"1"`` when plugged in and ``"0"``
-        when removed. Other payloads are ignored.
-        """
-        value = str(payload).strip()
-        if value not in {"0", "1"}:
-            return False
-
-        audio = self.raw.get("audio")
-        if not isinstance(audio, dict):
-            audio = {}
-            self.raw["audio"] = audio
-        config = audio.get("config")
-        if not isinstance(config, dict):
-            config = {}
-            audio["config"] = config
-        config["headphones_en"] = value == "1"
-        self._rebuild_from_raw()
-        return True
+        return playback
 
     # ------------------------------------------------------------------
-    # Rebuild typed state from raw dict
+    # Rebuild one typed slice from raw. Callers rebuild only the slice
+    # that changed, so a wifi or position tick does not replace the catalog.
     # ------------------------------------------------------------------
-
-    def _rebuild_from_raw(self) -> None:
-        """Populate all typed dataclasses from ``self.raw``."""
-        self._rebuild_power()
-        self._rebuild_audio()
-        self._rebuild_wifi()
-        self._rebuild_nfc()
-        self._rebuild_spotify()
-        self._rebuild_device()
-        self._rebuild_db()
-        self._rebuild_facade()
 
     # -- Power ----------------------------------------------------------
 
