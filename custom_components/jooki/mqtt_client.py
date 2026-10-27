@@ -94,9 +94,12 @@ class JookiMqttClient(JookiDevice):
         self._client.loop_stop()
         self._client.disconnect()
 
-    async def async_publish(self, topic: str, payload: str = "") -> None:
-        """Publish a message to the Jooki."""
-        await self._hass.async_add_executor_job(self._client.publish, topic, payload)
+    async def _async_publish(self, topic: str, payload: str = "") -> None:
+        """Enqueue a publish.
+
+        ``Client.publish`` only queues the message. The network loop sends it.
+        """
+        self._client.publish(topic, payload)
 
     async def async_resync(self) -> None:
         """Send CONNECT handshake + GET_STATE to request a full state dump."""
@@ -108,104 +111,104 @@ class JookiMqttClient(JookiDevice):
                 "label": self._host,
             }
         })
-        await self.async_publish(cfg.topic_connect, connect_payload)
-        await self.async_publish(cfg.topic_get_state, "{}")
+        await self._async_publish(cfg.topic_connect, connect_payload)
+        await self._async_publish(cfg.topic_get_state, "{}")
         _LOGGER.debug("Resync requested for Jooki at %s", self._host)
 
     async def async_play(self) -> None:
         """Send play command."""
         topic, payload = device_commands.play(self._device_config)
-        await self.async_publish(topic, payload)
+        await self._async_publish(topic, payload)
 
     async def async_pause(self) -> None:
         """Send pause command."""
         topic, payload = device_commands.pause(self._device_config)
-        await self.async_publish(topic, payload)
+        await self._async_publish(topic, payload)
 
     async def async_next_track(self) -> None:
         """Send next track command."""
         topic, payload = device_commands.next_track(self._device_config)
-        await self.async_publish(topic, payload)
+        await self._async_publish(topic, payload)
 
     async def async_previous_track(self) -> None:
         """Send previous track command."""
         topic, payload = device_commands.previous_track(self._device_config)
-        await self.async_publish(topic, payload)
+        await self._async_publish(topic, payload)
 
     async def async_seek(self, position: float) -> None:
         """Seek to a position in the current track (seconds)."""
         topic, payload = device_commands.seek(self._device_config, position)
-        await self.async_publish(topic, payload)
+        await self._async_publish(topic, payload)
 
     async def async_set_volume(self, volume: float) -> None:
         """Set volume from a 0.0 to 1.0 level."""
         topic, payload = device_commands.set_volume(
             self._device_config, volume, scale=MAX_VOLUME
         )
-        await self.async_publish(topic, payload)
+        await self._async_publish(topic, payload)
 
     async def async_set_repeat_mode(self, mode: int) -> None:
         """Set repeat mode from the device value 0, 1, or 2."""
         topic, payload = device_commands.set_repeat_mode(self._device_config, mode)
-        await self.async_publish(topic, payload)
+        await self._async_publish(topic, payload)
 
     async def async_set_shuffle(self, shuffle: bool) -> None:
         """Set shuffle mode."""
         topic, payload = device_commands.set_shuffle(self._device_config, shuffle)
-        await self.async_publish(topic, payload)
+        await self._async_publish(topic, payload)
 
     async def async_shutdown(self) -> None:
         """Shut down the Jooki."""
         topic, payload = device_commands.shutdown(self._device_config)
-        await self.async_publish(topic, payload)
+        await self._async_publish(topic, payload)
 
     async def async_play_playlist(self, playlist_id: str, track_index: int) -> None:
         """Play a playlist from ``track_index``."""
         topic, payload = device_commands.play_playlist(
             self._device_config, playlist_id, track_index
         )
-        await self.async_publish(topic, payload)
+        await self._async_publish(topic, payload)
 
     async def async_send_nfc_tag(self, payload: str) -> None:
         """Send an NFC tag payload string unchanged."""
         topic, body = device_commands.nfc_tag(self._device_config, payload)
-        await self.async_publish(topic, body)
+        await self._async_publish(topic, body)
 
     async def async_set_toy_safe(self, enable: bool) -> None:
         """Enable or disable Toy Safe mode."""
         topic, payload = device_commands.set_toy_safe(self._device_config, enable)
-        await self.async_publish(topic, payload)
+        await self._async_publish(topic, payload)
         self._state.note_toy_safe(enable)
 
     async def async_set_locale(self, locale_code: str) -> None:
         """Switch the device language."""
         topic, payload = device_commands.set_locale(self._device_config, locale_code)
-        await self.async_publish(topic, payload)
+        await self._async_publish(topic, payload)
 
     async def async_set_led_raw(self, r: int, g: int, b: int) -> None:
         """Set the LED ring to an RGB color."""
         topic, payload = device_commands.set_led_raw(self._device_config, r, g, b)
-        await self.async_publish(topic, payload)
+        await self._async_publish(topic, payload)
 
     async def async_pulse_led(self, payload: str) -> None:
         """Publish a pulse_raw wire string such as ``ALL,255,0,0,3,500,1.0``."""
         topic, body = device_commands.pulse_led(self._device_config, payload)
-        await self.async_publish(topic, body)
+        await self._async_publish(topic, body)
 
     async def async_set_charge_effect(self, effect: str) -> None:
         """Publish a charge_state token such as ``BAT_INC`` or ``BAT_DEC``."""
         topic, payload = device_commands.set_charge_effect(self._device_config, effect)
-        await self.async_publish(topic, payload)
+        await self._async_publish(topic, payload)
 
     async def async_turn_off_led(self) -> None:
         """Turn the LED ring off."""
         topic, payload = device_commands.turn_off_led(self._device_config)
-        await self.async_publish(topic, payload)
+        await self._async_publish(topic, payload)
 
     async def async_skip_seconds(self, delta_s: int) -> None:
         """Skip forward or backward by ``delta_s`` seconds."""
         topic, payload = device_commands.skip_seconds(self._device_config, delta_s)
-        await self.async_publish(topic, payload)
+        await self._async_publish(topic, payload)
 
     def _on_connect(
         self,
