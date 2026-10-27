@@ -94,6 +94,9 @@ class JookiDeviceConfig:
     topic_audio_error: str
     topic_audio_ended: str
 
+    # J2000 headphone jack. Left unset on J1000 so the topic table is shared.
+    topic_gpio_hp_plugged: str | None = None
+
 
 # -- Jooki J1000 (original) ------------------------------------------------
 
@@ -169,6 +172,7 @@ DEVICE_CONFIG_V2 = JookiDeviceConfig(
     topic_audio_stopped="/j/audio/input/stopped",
     topic_audio_error="/j/audio/input/error",
     topic_audio_ended="/j/audio/input/ended",
+    topic_gpio_hp_plugged="/j/gpio/input/hp_plugged",
 )
 
 DEVICE_CONFIGS: dict[str, JookiDeviceConfig] = {

@@ -327,6 +327,28 @@ class JookiState:
         self._rebuild_from_raw()
         return True
 
+    def apply_hp_plugged(self, payload: str) -> bool:
+        """Record a J2000 headphone jack event on ``audio.config``.
+
+        ``/j/gpio/input/hp_plugged`` is ``"1"`` when plugged in and ``"0"``
+        when removed. Other payloads are ignored.
+        """
+        value = str(payload).strip()
+        if value not in {"0", "1"}:
+            return False
+
+        audio = self.raw.get("audio")
+        if not isinstance(audio, dict):
+            audio = {}
+            self.raw["audio"] = audio
+        config = audio.get("config")
+        if not isinstance(config, dict):
+            config = {}
+            audio["config"] = config
+        config["headphones_en"] = value == "1"
+        self._rebuild_from_raw()
+        return True
+
     # ------------------------------------------------------------------
     # Rebuild typed state from raw dict
     # ------------------------------------------------------------------

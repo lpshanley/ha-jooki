@@ -143,6 +143,9 @@ class JookiMqttClient:
         client.subscribe(cfg.topic_audio_error)
         client.subscribe(cfg.topic_audio_ended)
 
+        if self.is_v2 and cfg.topic_gpio_hp_plugged:
+            client.subscribe(cfg.topic_gpio_hp_plugged)
+
         # Reset state for accumulation
         self._state = JookiState(available=True)
         self._dispatch_state()
@@ -198,6 +201,8 @@ class JookiMqttClient:
             self._handle_gpio_button(topic, msg)
         elif topic == cfg.topic_gpio_vol_set:
             self._handle_gpio_vol_set(msg)
+        elif cfg.topic_gpio_hp_plugged and topic == cfg.topic_gpio_hp_plugged:
+            self._handle_hp_plugged(msg)
         elif topic in (
             cfg.topic_audio_position,
             cfg.topic_audio_playing,
@@ -272,6 +277,15 @@ class JookiMqttClient:
             button_name,
             event_type,
         )
+
+    def _handle_hp_plugged(self, msg: mqtt.MQTTMessage) -> None:
+        """Track the J2000 headphone jack (payload ``1`` or ``0``)."""
+        try:
+            value = msg.payload.decode().strip()
+        except UnicodeDecodeError:
+            return
+        if self._state.apply_hp_plugged(value):
+            self._dispatch_state()
 
     def _handle_gpio_vol_set(self, msg: mqtt.MQTTMessage) -> None:
         """Handle a physical volume knob change event."""
