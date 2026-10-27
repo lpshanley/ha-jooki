@@ -9,18 +9,41 @@ from dataclasses import dataclass, field
 # Helpers
 # ---------------------------------------------------------------------------
 
+# Top-level slices the player publishes independently. ``audio`` is special:
+# config, playback, and nowPlaying replace one at a time.
+_AUDIO_KEY = "audio"
 
-def _deep_merge(base: dict, update: dict) -> dict:
-    """Recursively merge *update* into *base*, mutating and returning *base*.
 
-    Non-dict values (including lists) overwrite rather than merge.
+def _as_dict(value: object) -> dict:
+    """Return a JSON object.
+
+    Empty Lua tables encode as ``[]``. Those are empty maps, not nested data.
+    """
+    if isinstance(value, dict):
+        return value
+    return {}
+
+
+def _replace_slices(base: dict, update: dict) -> None:
+    """Replace each slice present in *update*. Sibling slices stay put.
+
+    A present top-level key replaces that value. Keys inside ``audio`` replace
+    ``config``, ``playback``, or ``nowPlaying`` without touching the others.
+    Nested fields are not merged: an omitted album or playlist is gone.
     """
     for key, value in update.items():
-        if isinstance(value, dict) and isinstance(base.get(key), dict):
-            _deep_merge(base[key], value)
-        else:
-            base[key] = value
-    return base
+        if key == _AUDIO_KEY:
+            if not isinstance(value, dict):
+                # ``[]`` is an empty Lua table and carries no audio sub-slice.
+                continue
+            current = base.get(_AUDIO_KEY)
+            if not isinstance(current, dict):
+                current = {}
+                base[_AUDIO_KEY] = current
+            for subkey, subvalue in value.items():
+                current[subkey] = subvalue
+            continue
+        base[key] = value
 
 
 # ---------------------------------------------------------------------------
@@ -199,12 +222,9 @@ class JookiPlaybackState:
 class JookiState:
     """Combined state of a Jooki device.
 
-    For **v1** the entire state is replaced on every MQTT message via
-    ``from_json()``.
-
-    For **v2** each message is a partial update containing a single top-level
-    key.  Call ``merge_partial()`` to deep-merge it into ``raw`` and rebuild
-    the typed dataclasses.
+    J1000 and J2000 publish the same partial slices. ``apply_slices()``
+    replaces each slice whose key is present, leaves sibling slices in
+    ``raw``, and rebuilds the typed fields from that accumulated raw state.
     """
 
     # -- Facade fields (entity platforms read these) --
@@ -223,24 +243,16 @@ class JookiState:
     device: JookiDeviceInfo = field(default_factory=JookiDeviceInfo)
     db: JookiDatabaseState = field(default_factory=JookiDatabaseState)
 
-    # ------------------------------------------------------------------
-    # V1: full-replace (existing behavior)
-    # ------------------------------------------------------------------
-
     @classmethod
     def from_json(cls, payload: dict) -> "JookiState":
-        """Parse a complete Jooki v1 state payload into a JookiState."""
-        state = cls(available=True, raw=payload)
-        state._rebuild_from_raw()
+        """Parse a payload by replacing each slice that is present."""
+        state = cls()
+        state.apply_slices(payload)
         return state
 
-    # ------------------------------------------------------------------
-    # V2: partial deep-merge
-    # ------------------------------------------------------------------
-
-    def merge_partial(self, payload: dict) -> None:
-        """Deep-merge a v2 partial update into the accumulated raw state."""
-        _deep_merge(self.raw, payload)
+    def apply_slices(self, payload: dict) -> None:
+        """Replace each slice present in *payload* and rebuild typed state."""
+        _replace_slices(self.raw, payload)
         self.available = True
         self._rebuild_from_raw()
 
@@ -262,67 +274,82 @@ class JookiState:
     # -- Power ----------------------------------------------------------
 
     def _rebuild_power(self) -> None:
-        power_data = self.raw.get("power", {})
-        level_data = power_data.get("level", {})
+        power_data = self.raw.get("power")
+        if not isinstance(power_data, dict):
+            self.power = JookiPowerState()
+            return
 
-        # Progressive fields: only overwrite if present in this update,
-        # otherwise keep existing values.
+        level_data = power_data.get("level")
+        if not isinstance(level_data, dict):
+            level_data = {}
+
+        # ``p`` is tenths of a percent (1000 = 100.0%). Omitted fields belong
+        # to this replaced slice, so they do not keep the previous reading.
+        if "p" in level_data:
+            battery_percent = level_data["p"] / 10.0
+        else:
+            battery_percent = 0.0
         self.power = JookiPowerState(
-            charging=power_data.get("charging", self.power.charging),
-            connected=power_data.get("connected", self.power.connected),
-            battery_percent=level_data.get("p", 0) / 10.0 if "p" in level_data else self.power.battery_percent,
-            battery_mv=level_data.get("mv", self.power.battery_mv),
+            charging=bool(power_data.get("charging", False)),
+            connected=bool(power_data.get("connected", False)),
+            battery_percent=battery_percent,
+            battery_mv=level_data.get("mv", 0) or 0,
         )
 
     # -- Audio (config / nowPlaying / playback) -------------------------
 
     def _rebuild_audio(self) -> None:
-        audio_data = self.raw.get("audio", {})
+        audio_data = self.raw.get("audio")
+        if not isinstance(audio_data, dict):
+            audio_data = {}
 
-        # audio.config
-        config_data = audio_data.get("config", {})
-        if config_data:
+        config_data = audio_data.get("config")
+        if isinstance(config_data, dict):
             self.audio_config = JookiAudioConfig(
-                volume=config_data.get("volume", self.audio_config.volume),
-                headphones_en=config_data.get("headphones_en", self.audio_config.headphones_en),
-                repeat_mode=config_data.get("repeat_mode", self.audio_config.repeat_mode),
-                shuffle_mode=config_data.get("shuffle_mode", self.audio_config.shuffle_mode),
+                volume=config_data.get("volume", 0) or 0,
+                headphones_en=bool(config_data.get("headphones_en", False)),
+                repeat_mode=config_data.get("repeat_mode", 0) or 0,
+                shuffle_mode=bool(config_data.get("shuffle_mode", False)),
             )
+        else:
+            self.audio_config = JookiAudioConfig()
 
-        # audio.nowPlaying — two shapes, deep-merged into one dataclass
-        np_data = audio_data.get("nowPlaying", {})
-        if np_data:
+        np_data = audio_data.get("nowPlaying")
+        if isinstance(np_data, dict):
             self.now_playing = JookiNowPlaying(
-                track=np_data.get("track", self.now_playing.track),
-                artist=np_data.get("artist", self.now_playing.artist),
-                album=np_data.get("album", self.now_playing.album),
-                image=np_data.get("image", self.now_playing.image) or None,
-                duration_ms=np_data.get("duration_ms", self.now_playing.duration_ms),
-                has_next=np_data.get("hasNext", self.now_playing.has_next),
-                has_prev=np_data.get("hasPrev", self.now_playing.has_prev),
-                source=np_data.get("source", self.now_playing.source),
-                source_uri=np_data.get("source_uri", self.now_playing.source_uri),
-                audiobook=np_data.get("audiobook", self.now_playing.audiobook),
-                restricted=np_data.get("restricted", self.now_playing.restricted),
-                service=np_data.get("service", self.now_playing.service),
-                uri=np_data.get("uri", self.now_playing.uri),
-                playlist_id=np_data.get("playlistId", self.now_playing.playlist_id),
+                track=np_data.get("track"),
+                artist=np_data.get("artist"),
+                album=np_data.get("album"),
+                image=np_data.get("image") or None,
+                duration_ms=np_data.get("duration_ms"),
+                has_next=bool(np_data.get("hasNext", False)),
+                has_prev=bool(np_data.get("hasPrev", False)),
+                source=np_data.get("source"),
+                source_uri=np_data.get("source_uri"),
+                audiobook=bool(np_data.get("audiobook", False)),
+                restricted=bool(np_data.get("restricted", False)),
+                service=np_data.get("service"),
+                uri=np_data.get("uri"),
+                playlist_id=np_data.get("playlistId"),
             )
+        else:
+            self.now_playing = JookiNowPlaying()
 
-        # audio.playback
-        playback_data = audio_data.get("playback", {})
-        if playback_data:
-            raw_state = playback_data.get("state", self.playback_info.state)
+        playback_data = audio_data.get("playback")
+        if isinstance(playback_data, dict):
+            raw_state = playback_data.get("state", "idle")
             self.playback_info = JookiPlaybackInfo(
                 state=raw_state.lower() if isinstance(raw_state, str) else "idle",
-                position_ms=playback_data.get("position_ms", self.playback_info.position_ms),
+                position_ms=playback_data.get("position_ms"),
             )
+        else:
+            self.playback_info = JookiPlaybackInfo()
 
     # -- WiFi -----------------------------------------------------------
 
     def _rebuild_wifi(self) -> None:
-        wifi_data = self.raw.get("wifi", {})
-        if wifi_data:
+        wifi_data = self.raw.get("wifi")
+        if isinstance(wifi_data, dict):
             self.wifi = JookiWifiState(
                 ssid=wifi_data.get("ssid"),
                 bssid=wifi_data.get("bssid"),
@@ -331,39 +358,44 @@ class JookiState:
                 crypt=wifi_data.get("crypt"),
                 stat=wifi_data.get("stat"),
             )
+        else:
+            self.wifi = JookiWifiState()
 
     # -- NFC ------------------------------------------------------------
 
     def _rebuild_nfc(self) -> None:
-        nfc_data = self.raw.get("nfc")
-        if nfc_data is None:
-            return  # no nfc key yet — leave defaults
+        if "nfc" not in self.raw:
+            self.nfc = JookiNfcState()
+            return
 
-        if isinstance(nfc_data, list):
-            # Empty list = no figurine
-            self.nfc = JookiNfcState(present=False)
-        elif isinstance(nfc_data, dict):
+        nfc_data = self.raw.get("nfc")
+        if isinstance(nfc_data, dict):
             self.nfc = JookiNfcState(
                 star_id=nfc_data.get("starId"),
                 tag_id=nfc_data.get("tagId"),
                 present=True,
             )
+        else:
+            # ``[]`` is an empty Lua table: no figurine on the reader.
+            self.nfc = JookiNfcState(present=False)
 
     # -- Spotify --------------------------------------------------------
 
     def _rebuild_spotify(self) -> None:
-        spotify_data = self.raw.get("spotify", {})
-        if spotify_data:
+        spotify_data = self.raw.get("spotify")
+        if isinstance(spotify_data, dict):
             self.spotify = JookiSpotifyState(
-                active=spotify_data.get("active", self.spotify.active),
-                username=spotify_data.get("username", self.spotify.username),
+                active=bool(spotify_data.get("active", False)),
+                username=spotify_data.get("username"),
             )
+        else:
+            self.spotify = JookiSpotifyState()
 
     # -- Device ---------------------------------------------------------
 
     def _rebuild_device(self) -> None:
-        device_data = self.raw.get("device", {})
-        if device_data:
+        device_data = self.raw.get("device")
+        if isinstance(device_data, dict):
             self.device = JookiDeviceInfo(
                 firmware=device_data.get("firmware"),
                 hostname=device_data.get("hostname"),
@@ -373,45 +405,53 @@ class JookiState:
                 wifi_mac=device_data.get("wifi_mac"),
                 disk_usage=device_data.get("diskUsage"),
                 flags=device_data.get("flags"),
-                toy_safe=device_data.get("toy_safe", False),
+                toy_safe=bool(device_data.get("toy_safe", False)),
             )
+        else:
+            self.device = JookiDeviceInfo()
 
     # -- Database (playlists / tokens / tracks) ---------------------------
 
     def _rebuild_db(self) -> None:
-        db_data = self.raw.get("db", {})
-        if not db_data:
+        db_data = self.raw.get("db")
+        if not isinstance(db_data, dict):
+            self.db = JookiDatabaseState()
             return
 
-        # Playlists — keyed by playlist ID
-        playlists_data = db_data.get("playlists", {})
-        for pid, pdata in playlists_data.items():
-            spotify_data = pdata.get("spotify", {})
-            self.db.playlists[pid] = JookiPlaylist(
+        playlists: dict[str, JookiPlaylist] = {}
+        for pid, pdata in _as_dict(db_data.get("playlists")).items():
+            if not isinstance(pdata, dict):
+                continue
+            spotify_data = pdata.get("spotify")
+            if not isinstance(spotify_data, dict):
+                spotify_data = {}
+            playlists[pid] = JookiPlaylist(
                 playlist_id=pid,
                 title=pdata.get("title", ""),
                 image=pdata.get("image"),
                 tag_id=pdata.get("tagId"),
-                audiobook=pdata.get("audiobook", False),
-                tracks=pdata.get("tracks", []),
-                spotify_source=spotify_data.get("source") if spotify_data else None,
-                spotify_uri=spotify_data.get("uri") if spotify_data else None,
+                audiobook=bool(pdata.get("audiobook", False)),
+                tracks=pdata.get("tracks") or [],
+                spotify_source=spotify_data.get("source"),
+                spotify_uri=spotify_data.get("uri"),
             )
 
-        # Tokens — keyed by NFC tag ID
-        tokens_data = db_data.get("tokens", {})
-        for tid, tdata in tokens_data.items():
-            self.db.tokens[tid] = JookiToken(
+        tokens: dict[str, JookiToken] = {}
+        for tid, tdata in _as_dict(db_data.get("tokens")).items():
+            if not isinstance(tdata, dict):
+                continue
+            tokens[tid] = JookiToken(
                 tag_id=tid,
                 name=tdata.get("name", ""),
                 star_id=tdata.get("starId"),
                 seen=tdata.get("seen"),
             )
 
-        # Tracks — keyed by content hash
-        tracks_data = db_data.get("tracks", {})
-        for trid, trdata in tracks_data.items():
-            self.db.tracks[trid] = JookiTrack(
+        tracks: dict[str, JookiTrack] = {}
+        for trid, trdata in _as_dict(db_data.get("tracks")).items():
+            if not isinstance(trdata, dict):
+                continue
+            tracks[trid] = JookiTrack(
                 track_id=trid,
                 title=trdata.get("title", ""),
                 artist=trdata.get("artist"),
@@ -419,9 +459,13 @@ class JookiState:
                 duration=trdata.get("duration"),
                 filename=trdata.get("filename"),
                 format=trdata.get("format2"),
-                has_image=trdata.get("hasImage", False),
+                has_image=bool(trdata.get("hasImage", False)),
                 size=trdata.get("size"),
             )
+
+        self.db = JookiDatabaseState(
+            playlists=playlists, tokens=tokens, tracks=tracks
+        )
 
     # -- Facade (backward-compatible JookiPlaybackState) ----------------
 

@@ -218,11 +218,7 @@ class JookiMqttClient:
             _LOGGER.warning("Invalid JSON from Jooki: %s", msg.payload[:200])
             return
 
-        if self.is_v2:
-            self._state.merge_partial(payload)
-        else:
-            self._state = JookiState.from_json(payload)
-
+        self._state.apply_slices(payload)
         self._dispatch_state()
 
     def _handle_nfc_tag(self, msg: mqtt.MQTTMessage) -> None:
