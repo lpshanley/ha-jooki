@@ -1,6 +1,7 @@
 {
   "domain": "jooki",
   "name": "Jooki",
+  "categories": ["media_entertainment.speakers_audio"],
   "codeowners": ["@lpshanley"],
   "config_flow": true,
   "dependencies": [],

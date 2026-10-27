@@ -7,13 +7,13 @@ on:
 jobs:
   release:
     name: Build and upload release asset
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set version in manifest
         run: |
@@ -27,6 +27,6 @@ jobs:
           zip -r ../jooki.zip jooki/
 
       - name: Upload release asset
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: jooki.zip
