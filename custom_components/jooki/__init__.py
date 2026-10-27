@@ -49,36 +49,36 @@ async def async_setup_entry(hass: HomeAssistant, entry: JookiConfigEntry) -> boo
     return True
 
 
+def _client_for_device(hass: HomeAssistant, device_id: str) -> JookiDevice:
+    """Return the Jooki client for a Home Assistant device id."""
+    device_reg = dr.async_get(hass)
+    device = device_reg.async_get(device_id)
+    if not device:
+        raise ServiceValidationError(
+            f"Device {device_id} not found",
+            translation_key="device_not_found",
+        )
+
+    for entry_id in device.config_entries:
+        entry = hass.config_entries.async_get_entry(entry_id)
+        if entry and entry.domain == DOMAIN:
+            return entry.runtime_data
+
+    raise ServiceValidationError(
+        f"No Jooki config entry found for device {device_id}",
+        translation_key="not_jooki_device",
+    )
+
+
 def _register_services(hass: HomeAssistant) -> None:
     """Register integration-level services (idempotent)."""
     if hass.services.has_service(DOMAIN, SERVICE_SKIP_SECONDS):
         return
 
     async def handle_skip_seconds(call: ServiceCall) -> None:
-        """Handle jooki.skip_seconds service call."""
-        device_id = call.data["device_id"]
-        delta_s = call.data["delta_s"]
-
-        device_reg = dr.async_get(hass)
-        device = device_reg.async_get(device_id)
-        if not device:
-            raise ServiceValidationError(
-                f"Device {device_id} not found",
-                translation_key="device_not_found",
-            )
-
-        # Find the config entry for this device
-        for entry_id in device.config_entries:
-            entry = hass.config_entries.async_get_entry(entry_id)
-            if entry and entry.domain == DOMAIN:
-                client: JookiDevice = entry.runtime_data
-                await client.async_skip_seconds(delta_s)
-                return
-
-        raise ServiceValidationError(
-            f"No Jooki config entry found for device {device_id}",
-            translation_key="not_jooki_device",
-        )
+        """Handle the skip_seconds service call."""
+        client = _client_for_device(hass, call.data["device_id"])
+        await client.async_skip_seconds(call.data["delta_s"])
 
     hass.services.async_register(
         DOMAIN,
