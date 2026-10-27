@@ -19,9 +19,9 @@ from .const import (
     SIGNAL_NFC_EVENT,
     SIGNAL_STATE_UPDATED,
     SIGNAL_VOLUME_EVENT,
-    JookiDeviceConfig,
 )
 from .device_commands import JookiDevice
+from .device_config import JookiDeviceConfig
 from .models import JookiState
 
 _LOGGER = logging.getLogger(__name__)
@@ -70,11 +70,6 @@ class JookiMqttClient(JookiDevice):
     def model_name(self) -> str:
         """Return the model name for this device family."""
         return self._device_config.model_name
-
-    @property
-    def device_config(self) -> JookiDeviceConfig:
-        """Return the version-specific device configuration."""
-        return self._device_config
 
     @property
     def is_v2(self) -> bool:

@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from homeassistant.const import Platform
 
-from .device_config import JookiDeviceConfig, get_device_config
-
 DOMAIN = "jooki"
 DEFAULT_PORT = 1883
 DEFAULT_NAME = "Jooki"
@@ -39,9 +37,3 @@ MEDIA_TYPE_TRACK = "track"
 DEVICE_VERSION_V1 = "j1000"
 DEVICE_VERSION_V2 = "j2000"
 DEVICE_VERSIONS = [DEVICE_VERSION_V1, DEVICE_VERSION_V2]
-
-# Re-exported so existing imports keep working. Callers switch in a later commit.
-__all__ = [
-    "JookiDeviceConfig",
-    "get_device_config",
-]
