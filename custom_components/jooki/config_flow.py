@@ -16,7 +16,6 @@ from .const import (
     DEFAULT_PORT,
     DEVICE_VERSION_V1,
     DEVICE_VERSION_V2,
-    DEVICE_VERSIONS,
     DOMAIN,
 )
 
