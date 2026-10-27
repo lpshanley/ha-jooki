@@ -24,7 +24,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from . import JookiConfigEntry
 from .const import DOMAIN, SIGNAL_STATE_UPDATED
 from .device_commands import JookiDevice
-from .models import JookiState
+from .models import JookiState, figurine_label
 
 
 def _disk_usage_percent(state: JookiState) -> int | None:
@@ -83,7 +83,9 @@ async def async_setup_entry(
             key="figurine",
             name="Figurine",
             icon="mdi:teddy-bear",
-            value_fn=lambda s: s.nfc.star_id if s.nfc.present else None,
+            value_fn=lambda s: (
+                figurine_label(s, s.nfc.tag_id, s.nfc.star_id) if s.nfc.present else None
+            ),
         ),
         JookiSensor(
             client=client,

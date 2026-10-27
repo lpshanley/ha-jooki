@@ -24,7 +24,7 @@ from .const import (
     SIGNAL_VOLUME_EVENT,
 )
 from .device_config import JookiDeviceConfig
-from .models import JookiState
+from .models import JookiState, figurine_label
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -361,7 +361,11 @@ class JookiMqttClient(JookiDevice):
             self._hass,
             self._signal_nfc,
             "figurine_placed",
-            {"tag_id": tag_id, "star_id": star_id},
+            {
+                "tag_id": tag_id,
+                "star_id": star_id,
+                "name": figurine_label(self._state, tag_id, star_id),
+            },
         )
 
     def _handle_nfc_tag_removed(self) -> None:

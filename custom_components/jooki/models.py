@@ -83,6 +83,27 @@ def playlist_id_for_figurine(
     return None
 
 
+def figurine_label(
+    state: JookiState, tag_id: str | None, star_id: str | None
+) -> str | None:
+    """Return the parent-facing name for a figurine.
+
+    Prefer the token name for ``tag_id`` when that string is non-empty,
+    otherwise the title of the playlist bound to that tag, otherwise
+    ``star_id``. A star-only playlist is not a name. Nothing present is None.
+    """
+    if isinstance(tag_id, str) and tag_id:
+        token = state.db.tokens.get(tag_id)
+        if token is not None and isinstance(token.name, str) and token.name:
+            return token.name
+        for playlist in state.db.playlists.values():
+            if playlist.tag_id == tag_id and playlist.title:
+                return playlist.title
+    if isinstance(star_id, str) and star_id:
+        return star_id
+    return None
+
+
 def retained_locale(selected: str | None, device_locale: str | None) -> str | None:
     """Keep the user's locale when a device slice does not report one.
 
