@@ -77,30 +77,24 @@ Once configured, the integration creates a single device with the following enti
 ## Contributing
 
 1. Fork the repository and create a feature branch from `main`
-2. Use conventional commit messages: `feat:`, `fix:`, `chore:`, `docs:`, etc.
-3. Open a pull request and add a label for changelog categorization:
-   - `enhancement` — new features
-   - `bug` — bug fixes
-   - `breaking-change` — breaking changes
-   - `chore` — maintenance
-4. PRs are automatically validated with [hassfest](https://developers.home-assistant.io/docs/creating_integration_manifest/) and [HACS action](https://github.com/hacs/action)
+2. Use conventional commit messages. The type chooses the next version:
+   - `feat:` — minor release
+   - `fix:` — patch release
+   - `feat!:` or a `BREAKING CHANGE:` footer — major release
+   - `perf:` and `refactor:` are included in the notes of the next release and do not bump the version on their own
+3. Open a pull request. PRs are validated with [hassfest](https://developers.home-assistant.io/docs/creating_integration_manifest/) and [HACS action](https://github.com/hacs/action)
 
 ## Releasing
 
-Releases are automated via GitHub Actions. To publish a new version:
+Pushing to `main` runs [Release Please](https://github.com/googleapis/release-please). When `feat` or `fix` commits are waiting, it opens a release pull request that updates `CHANGELOG.md` and the version in `manifest.json`.
 
-1. Merge PRs to `main` with appropriate labels
-2. Go to **Releases** → **Draft a new release**
-3. Create a new tag using semantic versioning (e.g. `0.2.0`)
-4. Click **Generate release notes** — PRs are auto-categorized by label
-5. Click **Publish release**
+Merging that pull request:
 
-The release workflow automatically:
-- Stamps the tag version into `manifest.json`
-- Packages the integration into a ZIP
-- Uploads `jooki.zip` as a release asset
+- Tags the version without a `v` prefix, matching `0.1.0`
+- Publishes the GitHub release and its notes
+- Uploads `jooki.zip` for HACS
 
-HACS picks up new releases automatically.
+A release published by hand still gets `jooki.zip` from the release workflow. That workflow stamps the tag into `manifest.json` inside the archive.
 
 ## Credits
 
