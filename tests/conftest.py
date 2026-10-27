@@ -1,4 +1,4 @@
-"""Load models.py without importing the Home Assistant package."""
+"""Load integration modules without importing the Home Assistant package."""
 
 from __future__ import annotations
 
@@ -8,16 +8,15 @@ from pathlib import Path
 
 import pytest
 
-_MODELS_PATH = (
-    Path(__file__).resolve().parents[1] / "custom_components" / "jooki" / "models.py"
-)
+_PACKAGE = Path(__file__).resolve().parents[1] / "custom_components" / "jooki"
 
 
-def load_models():
-    """Import ``models.py`` by path so ``custom_components.jooki`` stays unloaded."""
-    spec = importlib.util.spec_from_file_location("jooki_models", _MODELS_PATH)
+def _load(module_name: str, filename: str):
+    """Import a module by path so ``custom_components.jooki`` stays unloaded."""
+    path = _PACKAGE / filename
+    spec = importlib.util.spec_from_file_location(module_name, path)
     if spec is None or spec.loader is None:
-        raise RuntimeError(f"Cannot load {_MODELS_PATH}")
+        raise RuntimeError(f"Cannot load {path}")
     module = importlib.util.module_from_spec(spec)
     # Dataclasses resolve annotations through sys.modules.
     sys.modules[spec.name] = module
@@ -25,7 +24,34 @@ def load_models():
     return module
 
 
+def load_models():
+    """Import ``models.py`` by path."""
+    return _load("jooki_models", "models.py")
+
+
+def load_device_commands():
+    """Import ``device_commands.py`` by path."""
+    return _load("jooki_device_commands", "device_commands.py")
+
+
+def load_device_config():
+    """Import ``device_config.py`` by path."""
+    return _load("jooki_device_config", "device_config.py")
+
+
 @pytest.fixture(scope="session")
 def models():
     """Session-wide models module."""
     return load_models()
+
+
+@pytest.fixture(scope="session")
+def device_commands():
+    """Session-wide command encoding module."""
+    return load_device_commands()
+
+
+@pytest.fixture(scope="session")
+def device_config():
+    """Session-wide topic tables."""
+    return load_device_config()
