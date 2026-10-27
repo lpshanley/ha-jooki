@@ -26,6 +26,13 @@ SERVICE_SKIP_SECONDS_SCHEMA = vol.Schema(
         vol.Required("delta_s"): vol.Coerce(int),
     }
 )
+SERVICE_DISMISS_MESSAGE = "dismiss_message"
+SERVICE_DISMISS_MESSAGE_SCHEMA = vol.Schema(
+    {
+        vol.Required("device_id"): cv.string,
+        vol.Required("message_id"): vol.Coerce(int),
+    }
+)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: JookiConfigEntry) -> bool:
@@ -72,20 +79,31 @@ def _client_for_device(hass: HomeAssistant, device_id: str) -> JookiDevice:
 
 def _register_services(hass: HomeAssistant) -> None:
     """Register integration-level services (idempotent)."""
-    if hass.services.has_service(DOMAIN, SERVICE_SKIP_SECONDS):
-        return
 
     async def handle_skip_seconds(call: ServiceCall) -> None:
         """Handle the skip_seconds service call."""
         client = _client_for_device(hass, call.data["device_id"])
         await client.async_skip_seconds(call.data["delta_s"])
 
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_SKIP_SECONDS,
-        handle_skip_seconds,
-        schema=SERVICE_SKIP_SECONDS_SCHEMA,
-    )
+    async def handle_dismiss_message(call: ServiceCall) -> None:
+        """Handle the dismiss_message service call."""
+        client = _client_for_device(hass, call.data["device_id"])
+        await client.async_dismiss_message(call.data["message_id"])
+
+    if not hass.services.has_service(DOMAIN, SERVICE_SKIP_SECONDS):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_SKIP_SECONDS,
+            handle_skip_seconds,
+            schema=SERVICE_SKIP_SECONDS_SCHEMA,
+        )
+    if not hass.services.has_service(DOMAIN, SERVICE_DISMISS_MESSAGE):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_DISMISS_MESSAGE,
+            handle_dismiss_message,
+            schema=SERVICE_DISMISS_MESSAGE_SCHEMA,
+        )
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: JookiConfigEntry) -> bool:

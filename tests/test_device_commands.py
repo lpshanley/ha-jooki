@@ -159,6 +159,18 @@ def test_charge_effect_passes_the_wire_token_through(device_commands, device_con
     assert payload == effect
 
 
+def test_dismiss_message_publishes_the_id(device_commands, device_config):
+    """Dismiss sends ``{"id": N}`` on MESSAGE_DISMISS for both models."""
+    for version in (
+        device_config.DEVICE_CONFIG_V1.version,
+        device_config.DEVICE_CONFIG_V2.version,
+    ):
+        topics = device_config.get_device_config(version)
+        topic, payload = device_commands.dismiss_message(topics, 3)
+        assert topic == "/j/web/input/MESSAGE_DISMISS"
+        assert payload == '{"id": 3}'
+
+
 @pytest.mark.parametrize("delta_s", [30, -15])
 def test_skip_seconds_sends_delta_s(device_commands, device_config, delta_s):
     """Skip sends ``delta_s`` as a JSON number on SKIP_SEC."""

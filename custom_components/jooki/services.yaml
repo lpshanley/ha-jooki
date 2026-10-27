@@ -21,3 +21,25 @@ skip_seconds:
           step: 1
           unit_of_measurement: seconds
           mode: box
+
+dismiss_message:
+  name: Dismiss Message
+  description: Dismiss a device message by its id.
+  fields:
+    device_id:
+      name: Device
+      description: The Jooki device to control.
+      required: true
+      selector:
+        device:
+          integration: jooki
+    message_id:
+      name: Message ID
+      description: Id of the device message to dismiss.
+      required: true
+      example: 3
+      selector:
+        number:
+          min: 1
+          step: 1
+          mode: box

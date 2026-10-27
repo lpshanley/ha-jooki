@@ -39,6 +39,7 @@ class JookiDeviceConfig:
     topic_set_toy_safe: str
     topic_seek: str
     topic_skip_sec: str
+    topic_message_dismiss: str
     topic_switch_locale: str
 
     # MQTT topics — LED
@@ -88,6 +89,7 @@ DEVICE_CONFIG_V1 = JookiDeviceConfig(
     topic_set_toy_safe="/j/web/input/SET_TOY_SAFE",
     topic_seek="/j/web/input/SEEK",
     topic_skip_sec="/j/web/input/SKIP_SEC",
+    topic_message_dismiss="/j/web/input/MESSAGE_DISMISS",
     topic_switch_locale="/j/web/input/SWITCH_LOCALE",
     topic_led_set_raw="/j/led/output/set_raw",
     topic_led_pulse_raw="/j/led/output/pulse_raw",
@@ -126,6 +128,7 @@ DEVICE_CONFIG_V2 = JookiDeviceConfig(
     topic_set_toy_safe="/j/web/input/SET_TOY_SAFE",
     topic_seek="/j/web/input/SEEK",
     topic_skip_sec="/j/web/input/SKIP_SEC",
+    topic_message_dismiss="/j/web/input/MESSAGE_DISMISS",
     topic_switch_locale="/j/web/input/SWITCH_LOCALE",
     topic_led_set_raw="/j/led/output/set_raw",
     topic_led_pulse_raw="/j/led/output/pulse_raw",

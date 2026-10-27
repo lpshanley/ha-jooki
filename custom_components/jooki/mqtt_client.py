@@ -213,6 +213,13 @@ class JookiMqttClient(JookiDevice):
         topic, payload = device_commands.skip_seconds(self._device_config, delta_s)
         await self._async_publish(topic, payload)
 
+    async def async_dismiss_message(self, message_id: int) -> None:
+        """Dismiss a device message by id."""
+        topic, payload = device_commands.dismiss_message(
+            self._device_config, message_id
+        )
+        await self._async_publish(topic, payload)
+
     def _schedule(self, callback: Callable[..., None], *args: Any) -> None:
         """Queue ``callback`` on the Home Assistant loop, in arrival order.
 

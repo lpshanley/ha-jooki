@@ -28,6 +28,7 @@ class CommandTopics(Protocol):
     topic_set_toy_safe: str
     topic_seek: str
     topic_skip_sec: str
+    topic_message_dismiss: str
     topic_switch_locale: str
     topic_led_set_raw: str
     topic_led_pulse_raw: str
@@ -134,6 +135,15 @@ def skip_seconds(config: CommandTopics, delta_s: int) -> tuple[str, str]:
     return config.topic_skip_sec, json.dumps({"delta_s": delta_s})
 
 
+def dismiss_message(config: CommandTopics, message_id: int) -> tuple[str, str]:
+    """Return MESSAGE_DISMISS for a device message id.
+
+    The player publishes ``userMessages`` again after a successful dismiss,
+    so the caller does not drop the message locally.
+    """
+    return config.topic_message_dismiss, json.dumps({"id": message_id})
+
+
 class JookiDevice(Protocol):
     """Device operations and read-only state for entity modules."""
 
@@ -226,4 +236,8 @@ class JookiDevice(Protocol):
 
     async def async_skip_seconds(self, delta_s: int) -> None:
         """Skip forward or backward by ``delta_s`` seconds."""
+        ...
+
+    async def async_dismiss_message(self, message_id: int) -> None:
+        """Dismiss a device message by id."""
         ...
