@@ -175,6 +175,7 @@ class JookiMqttClient(JookiDevice):
         """Enable or disable Toy Safe mode."""
         topic, payload = device_commands.set_toy_safe(self._device_config, enable)
         await self.async_publish(topic, payload)
+        self._state.note_toy_safe(enable)
 
     async def async_set_locale(self, locale_code: str) -> None:
         """Switch the device language."""
