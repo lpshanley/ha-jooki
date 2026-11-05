@@ -9,7 +9,7 @@ import aiohttp
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntryState, ConfigFlow, ConfigFlowResult
-from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
+from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PASSWORD, CONF_PORT, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
@@ -40,42 +40,67 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_DEVICE_VERSION, default=DEVICE_VERSION_V1): vol.In(
             _DEVICE_VERSIONS
         ),
+        vol.Optional(CONF_USERNAME): str,
+        vol.Optional(CONF_PASSWORD): str,
     }
 )
+
+STEP_RECONFIGURE_DATA_SCHEMA = vol.Schema(
+    {
+        vol.Optional(CONF_USERNAME): str,
+        vol.Optional(CONF_PASSWORD): str,
+    }
+)
+
+# CONNACK codes for a refused login: MQTT 3.1.1 (4, 5) and MQTT 5 (134, 135).
+_AUTH_FAILED = (4, 5, 134, 135)
 
 STATE_TOPIC = "/j/web/output/state"
 
 
-def _test_mqtt_connection(host: str, port: int) -> bool:
-    """Test MQTT connection to a Jooki device (runs in executor)."""
+def _test_mqtt_connection(
+    host: str, port: int, username: str | None = None, password: str | None = None
+) -> str | None:
+    """Test MQTT connection to a Jooki device (runs in executor).
+
+    Return None on success, else the error key: ``invalid_auth`` when the
+    broker refuses the login, ``cannot_connect`` otherwise.
+    """
     import time
 
     import paho.mqtt.client as mqtt
 
     connected = False
+    refused = False
 
     def on_connect(client: mqtt.Client, userdata: Any, flags: Any, rc: int, properties: Any = None) -> None:
-        nonlocal connected
+        nonlocal connected, refused
         if rc == 0:
             connected = True
             client.disconnect()
+        elif getattr(rc, "value", rc) in _AUTH_FAILED:
+            refused = True
 
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
     client.on_connect = on_connect
+    if username:
+        client.username_pw_set(username, password or None)
 
     try:
         client.connect(host, port, keepalive=5)
         client.loop_start()
         deadline = time.monotonic() + 5
-        while not connected and time.monotonic() < deadline:
+        while not connected and not refused and time.monotonic() < deadline:
             time.sleep(0.1)
         client.loop_stop()
         client.disconnect()
     except Exception:
         _LOGGER.debug("Failed to connect to MQTT broker at %s:%s", host, port)
-        return False
+        return "cannot_connect"
 
-    return connected
+    if connected:
+        return None
+    return "invalid_auth" if refused else "cannot_connect"
 
 
 async def _async_fetch_ping(hass: HomeAssistant, host: str) -> dict[str, Any] | None:
@@ -138,11 +163,15 @@ class JookiConfigFlow(ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(host)
             self._abort_if_unique_id_configured()
 
-            can_connect = await self.hass.async_add_executor_job(
-                _test_mqtt_connection, host, port
+            error = await self.hass.async_add_executor_job(
+                _test_mqtt_connection,
+                host,
+                port,
+                user_input.get(CONF_USERNAME),
+                user_input.get(CONF_PASSWORD),
             )
 
-            if can_connect:
+            if error is None:
                 hostname = _ping_hostname(await _async_fetch_ping(self.hass, host))
                 if hostname is not None:
                     await self.async_set_unique_id(hostname)
@@ -154,11 +183,51 @@ class JookiConfigFlow(ConfigFlow, domain=DOMAIN):
                     data=user_input,
                 )
 
-            errors["base"] = "cannot_connect"
+            errors["base"] = error
 
         return self.async_show_form(
             step_id="user",
-            data_schema=STEP_USER_DATA_SCHEMA,
+            data_schema=self.add_suggested_values_to_schema(
+                STEP_USER_DATA_SCHEMA, user_input
+            ),
+            errors=errors,
+        )
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Update MQTT credentials without replacing the device's config entry."""
+        entry = self._get_reconfigure_entry()
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            error = await self.hass.async_add_executor_job(
+                _test_mqtt_connection,
+                entry.data[CONF_HOST],
+                entry.data[CONF_PORT],
+                user_input.get(CONF_USERNAME),
+                user_input.get(CONF_PASSWORD),
+            )
+            if error is None:
+                # Omitted optional fields clear the old credentials, allowing a
+                # player to return to anonymous MQTT access.
+                data = {
+                    key: value
+                    for key, value in entry.data.items()
+                    if key not in (CONF_USERNAME, CONF_PASSWORD)
+                }
+                data.update(user_input)
+                return self.async_update_reload_and_abort(
+                    entry, data=data, reason="reconfigure_successful"
+                )
+            errors["base"] = error
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=self.add_suggested_values_to_schema(
+                STEP_RECONFIGURE_DATA_SCHEMA,
+                entry.data if user_input is None else user_input,
+            ),
             errors=errors,
         )
 
@@ -173,11 +242,19 @@ class JookiConfigFlow(ConfigFlow, domain=DOMAIN):
         if hostname is None:
             return self.async_abort(reason="not_jooki")
 
-        can_connect = await self.hass.async_add_executor_job(
-            _test_mqtt_connection, ip, DEFAULT_PORT
+        entry = self.hass.config_entries.async_entry_for_domain_unique_id(
+            DOMAIN, hostname
+        ) or self.hass.config_entries.async_entry_for_domain_unique_id(DOMAIN, ip)
+        data = entry.data if entry is not None else {}
+        error = await self.hass.async_add_executor_job(
+            _test_mqtt_connection,
+            ip,
+            data.get(CONF_PORT, DEFAULT_PORT),
+            data.get(CONF_USERNAME),
+            data.get(CONF_PASSWORD),
         )
-        if not can_connect:
-            return self.async_abort(reason="cannot_connect")
+        if error is not None:
+            return self.async_abort(reason=error)
 
         version = device_version_for_hostname(hostname)
         if version is None:

@@ -46,6 +46,10 @@ Installs that cannot see DHCP, such as a bridged container, use manual setup:
 3. Enter the device's host, MQTT port (default 1883), a friendly name, and select the device model (J1000 or J2000)
 4. The integration tests the MQTT connection before completing setup
 
+Username and password are optional. A stock Jooki leaves them empty. A Jooki running [OpenJooki](https://github.com/Guillain-RDCDE/OpenJooki) needs them: turn on **Settings > Home automation** in its page, which shows the host, port, user (`jooki`) and password to enter here.
+
+If the MQTT credentials change, open the Jooki entry's three-dot menu under **Settings > Devices & Services** and choose **Reconfigure**. The integration validates the replacement credentials and reconnects the existing device. Clear both fields to return to anonymous MQTT access. DHCP discovery uses saved credentials when updating a configured player's IP address.
+
 ## Entities
 
 Once configured, the integration creates a single device with the following entities:
@@ -102,6 +106,10 @@ Once configured, the integration creates a single device with the following enti
    - `feat!:` or a `BREAKING CHANGE:` footer — major release
    - `perf:` and `refactor:` are included in the notes of the next release and do not bump the version on their own
 3. Open a pull request. PRs are validated with [hassfest](https://developers.home-assistant.io/docs/creating_integration_manifest/) and [HACS action](https://github.com/hacs/action)
+
+### Running tests
+
+Use Python 3.14 and install the test dependencies with `python -m pip install -r requirements-test.txt`, then run `python -m pytest -q`. The config-flow tests use Home Assistant's config-entry helpers with device I/O mocked, so no Jooki hardware is required.
 
 ## Releasing
 
