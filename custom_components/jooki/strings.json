@@ -21,6 +21,18 @@
           "password": "Leave empty for a stock Jooki. OpenJooki shows it in Settings > Home automation"
         }
       },
+      "reconfigure": {
+        "title": "Update Jooki MQTT login",
+        "description": "Update the MQTT credentials for this Jooki. Leave both fields empty if the broker no longer requires a login.",
+        "data": {
+          "username": "Username",
+          "password": "Password"
+        },
+        "data_description": {
+          "username": "OpenJooki uses jooki as the MQTT username",
+          "password": "OpenJooki shows the current password in Settings > Home automation"
+        }
+      },
       "discovery_confirm": {
         "title": "Discovered Jooki",
         "description": "{hostname} ({model}) was found at {ip}."
@@ -32,7 +44,8 @@
     },
     "abort": {
       "already_configured": "This Jooki device is already configured.",
-      "invalid_auth": "This Jooki asks for an MQTT login. Add it by hand with its username and password."
+      "invalid_auth": "This Jooki asks for an MQTT login. For an existing entry, use Reconfigure to update its credentials; otherwise, add it by hand with its username and password.",
+      "reconfigure_successful": "The MQTT login was updated."
     }
   }
 }

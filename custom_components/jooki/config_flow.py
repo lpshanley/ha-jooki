@@ -45,6 +45,13 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
     }
 )
 
+STEP_RECONFIGURE_DATA_SCHEMA = vol.Schema(
+    {
+        vol.Optional(CONF_USERNAME): str,
+        vol.Optional(CONF_PASSWORD): str,
+    }
+)
+
 # CONNACK codes for a refused login: MQTT 3.1.1 (4, 5) and MQTT 5 (134, 135).
 _AUTH_FAILED = (4, 5, 134, 135)
 
@@ -186,6 +193,44 @@ class JookiConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Update MQTT credentials without replacing the device's config entry."""
+        entry = self._get_reconfigure_entry()
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            error = await self.hass.async_add_executor_job(
+                _test_mqtt_connection,
+                entry.data[CONF_HOST],
+                entry.data[CONF_PORT],
+                user_input.get(CONF_USERNAME),
+                user_input.get(CONF_PASSWORD),
+            )
+            if error is None:
+                # Omitted optional fields clear the old credentials, allowing a
+                # player to return to anonymous MQTT access.
+                data = {
+                    key: value
+                    for key, value in entry.data.items()
+                    if key not in (CONF_USERNAME, CONF_PASSWORD)
+                }
+                data.update(user_input)
+                return self.async_update_reload_and_abort(
+                    entry, data=data, reason="reconfigure_successful"
+                )
+            errors["base"] = error
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=self.add_suggested_values_to_schema(
+                STEP_RECONFIGURE_DATA_SCHEMA,
+                entry.data if user_input is None else user_input,
+            ),
+            errors=errors,
+        )
+
     async def async_step_dhcp(
         self, discovery_info: DhcpServiceInfo
     ) -> ConfigFlowResult:
@@ -197,8 +242,16 @@ class JookiConfigFlow(ConfigFlow, domain=DOMAIN):
         if hostname is None:
             return self.async_abort(reason="not_jooki")
 
+        entry = self.hass.config_entries.async_entry_for_domain_unique_id(
+            DOMAIN, hostname
+        ) or self.hass.config_entries.async_entry_for_domain_unique_id(DOMAIN, ip)
+        data = entry.data if entry is not None else {}
         error = await self.hass.async_add_executor_job(
-            _test_mqtt_connection, ip, DEFAULT_PORT
+            _test_mqtt_connection,
+            ip,
+            data.get(CONF_PORT, DEFAULT_PORT),
+            data.get(CONF_USERNAME),
+            data.get(CONF_PASSWORD),
         )
         if error is not None:
             return self.async_abort(reason=error)
