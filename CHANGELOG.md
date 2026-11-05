@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.0](https://github.com/lpshanley/ha-jooki/compare/0.4.0...0.5.0) (2026-11-05)
+
+
+### Features
+
+* **config:** optional MQTT username and password ([d1130b7](https://github.com/lpshanley/ha-jooki/commit/d1130b79cdf623c8bc568efe27cd19d791bd2c3d))
+* **config:** optional MQTT username and password ([bf87025](https://github.com/lpshanley/ha-jooki/commit/bf87025586ea9eab8d18b66da0a3d02225c235b2))
+
+
+### Bug Fixes
+
+* **config:** support authenticated discovery and credential updates ([8f19ff2](https://github.com/lpshanley/ha-jooki/commit/8f19ff2ef98647c4b8939355047477035186ea7f))
+
 ## [0.4.0](https://github.com/lpshanley/ha-jooki/compare/0.3.0...0.4.0) (2026-10-27)
 
 
