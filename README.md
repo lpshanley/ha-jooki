@@ -46,6 +46,8 @@ Installs that cannot see DHCP, such as a bridged container, use manual setup:
 3. Enter the device's host, MQTT port (default 1883), a friendly name, and select the device model (J1000 or J2000)
 4. The integration tests the MQTT connection before completing setup
 
+Username and password are optional. A stock Jooki leaves them empty. A Jooki running [OpenJooki](https://github.com/Guillain-RDCDE/OpenJooki) needs them: turn on **Settings > Home automation** in its page, which shows the host, port, user (`jooki`) and password to enter here.
+
 ## Entities
 
 Once configured, the integration creates a single device with the following entities:

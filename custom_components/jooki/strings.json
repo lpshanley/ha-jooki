@@ -8,13 +8,17 @@
           "host": "Host",
           "port": "Port",
           "name": "Device name",
-          "device_version": "Device model"
+          "device_version": "Device model",
+          "username": "Username",
+          "password": "Password"
         },
         "data_description": {
           "host": "IP address or hostname of your Jooki",
           "port": "MQTT broker port (default 1883)",
           "name": "Friendly name for this Jooki device",
-          "device_version": "Select the hardware model of your Jooki player (J1000 = original, J2000 = second generation)"
+          "device_version": "Select the hardware model of your Jooki player (J1000 = original, J2000 = second generation)",
+          "username": "Leave empty for a stock Jooki. Only needed when the broker asks for a login (OpenJooki: jooki)",
+          "password": "Leave empty for a stock Jooki. OpenJooki shows it in Settings > Home automation"
         }
       },
       "discovery_confirm": {
@@ -23,10 +27,12 @@
       }
     },
     "error": {
-      "cannot_connect": "Failed to connect to the Jooki MQTT broker. Check the host and port."
+      "cannot_connect": "Failed to connect to the Jooki MQTT broker. Check the host and port.",
+      "invalid_auth": "The Jooki MQTT broker refused the login. Check the username and password."
     },
     "abort": {
-      "already_configured": "This Jooki device is already configured."
+      "already_configured": "This Jooki device is already configured.",
+      "invalid_auth": "This Jooki asks for an MQTT login. Add it by hand with its username and password."
     }
   }
 }

@@ -39,6 +39,8 @@ class JookiMqttClient(JookiDevice):
         port: int,
         entry_id: str,
         device_config: JookiDeviceConfig,
+        username: str | None = None,
+        password: str | None = None,
     ) -> None:
         """Initialize the MQTT client."""
         self._hass = hass
@@ -57,6 +59,8 @@ class JookiMqttClient(JookiDevice):
         self._client.on_connect = self._on_connect
         self._client.on_disconnect = self._on_disconnect
         self._client.on_message = self._on_message
+        if username:
+            self._client.username_pw_set(username, password or None)
         self._client.reconnect_delay_set(min_delay=5, max_delay=120)
 
     @property

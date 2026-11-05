@@ -7,7 +7,7 @@ from typing import cast
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST, CONF_PORT
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNAME
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv, device_registry as dr
@@ -54,6 +54,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: JookiConfigEntry) -> boo
         port=entry.data[CONF_PORT],
         entry_id=entry.entry_id,
         device_config=device_config,
+        username=entry.data.get(CONF_USERNAME),
+        password=entry.data.get(CONF_PASSWORD),
     )
     entry.runtime_data = client
     _watch_device_identity(hass, entry)
