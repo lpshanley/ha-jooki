@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/lpshanley/ha-jooki/compare/0.5.0...0.5.1) (2026-11-05)
+
+
+### Bug Fixes
+
+* **manifest:** add speakers and audio category ([ff8ad27](https://github.com/lpshanley/ha-jooki/commit/ff8ad27b3204440c127f7d56840ee5aa026e362c))
+
 ## [0.5.0](https://github.com/lpshanley/ha-jooki/compare/0.4.0...0.5.0) (2026-11-05)
 
 
